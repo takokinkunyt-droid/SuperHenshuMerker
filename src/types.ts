@@ -29,6 +29,36 @@ export interface TextStyle {
   maxWidth: number;
 }
 
+export type SlideDirection = 'left' | 'right' | 'top' | 'bottom';
+
+/** 映像エフェクト（画像・動画・テキスト）。未設定の項目は「なし」 */
+export interface VisualEffects {
+  /** ぼかしの強さ（画面上のピクセル、0でなし） */
+  blur?: number;
+  /** モザイクの1マスの大きさ（ピクセル、0でなし） */
+  mosaic?: number;
+  /** フェードイン・アウトの秒数 */
+  fadeIn?: number;
+  fadeOut?: number;
+  /** 画面外からスライドして入ってくる */
+  slideIn?: { direction: SlideDirection; duration: number } | null;
+  /** 拡大縮小しながら入ってくる（from 倍の大きさから 1 倍へ） */
+  zoomIn?: { from: number; duration: number } | null;
+}
+
+/** 音声エフェクト（音楽・動画の音声） */
+export interface AudioEffects {
+  /** 低音強化（dB、0でなし） */
+  bass?: number;
+  /** 元の音の代わりにピー音を鳴らす */
+  beep?: boolean;
+  /** ザーッというノイズを混ぜる量（0〜1） */
+  noise?: number;
+  /** 音量のフェードイン・アウトの秒数 */
+  fadeIn?: number;
+  fadeOut?: number;
+}
+
 interface ItemBase {
   id: string;
   layer: number;
@@ -47,11 +77,13 @@ export interface TextItem extends ItemBase {
   kind: 'text';
   text: string;
   style: TextStyle;
+  effects?: VisualEffects;
 }
 
 export interface ImageItem extends ItemBase, Placement {
   kind: 'image';
   assetId: string;
+  effects?: VisualEffects;
 }
 
 export interface VideoItem extends ItemBase, Placement {
@@ -59,6 +91,8 @@ export interface VideoItem extends ItemBase, Placement {
   assetId: string;
   sourceOffset: number;
   volume: number;
+  effects?: VisualEffects;
+  audioEffects?: AudioEffects;
 }
 
 export interface AudioItem extends ItemBase {
@@ -66,6 +100,7 @@ export interface AudioItem extends ItemBase {
   assetId: string;
   sourceOffset: number;
   volume: number;
+  audioEffects?: AudioEffects;
 }
 
 export type TimelineItem = TextItem | ImageItem | VideoItem | AudioItem;

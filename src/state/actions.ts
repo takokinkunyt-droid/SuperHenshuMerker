@@ -5,6 +5,7 @@ import { ASPECTS, LAYER, defaultTextStyle, uid, type AspectKey } from './default
 import { findFreeLayer, itemEnd, recenterItems, splitItem } from './timeline';
 import { importBlob, kindOf } from '../media/importer';
 import { media } from '../media/mediaCache';
+import { itemBaseBox } from '../render/renderer';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -181,4 +182,32 @@ export function primeProjectMedia(): void {
   const { project } = editorState();
   media.setProject(project.id);
   void media.ensureAll(Object.values(project.assets));
+}
+
+export type AlignH = 'left' | 'center' | 'right';
+export type AlignV = 'top' | 'middle' | 'bottom';
+
+/** 画面の余白（5%）・中央にぴったり合わせる */
+export function alignItem(id: string, h: AlignH | null, v: AlignV | null): void {
+  const s = editorState();
+  const item = s.project.items.find((it) => it.id === id);
+  if (!item) return;
+  const box = itemBaseBox(item, s.project);
+  if (!box) return;
+  const { width: W, height: H } = s.project;
+  const marginX = W * 0.05;
+  const marginY = H * 0.05;
+  const dx = h === 'left' ? marginX - box.x : h === 'center' ? W / 2 - (box.x + box.w / 2) : h === 'right' ? W - marginX - (box.x + box.w) : 0;
+  const dy = v === 'top' ? marginY - box.y : v === 'middle' ? H / 2 - (box.y + box.h / 2) : v === 'bottom' ? H - marginY - (box.y + box.h) : 0;
+  s.edit((d) => {
+    const it = d.items.find((x) => x.id === id);
+    if (!it) return;
+    if (it.kind === 'text') {
+      it.style.x = Math.round(it.style.x + dx);
+      it.style.y = Math.round(it.style.y + dy);
+    } else if (it.kind === 'image' || it.kind === 'video') {
+      it.x = Math.round(it.x + dx);
+      it.y = Math.round(it.y + dy);
+    }
+  });
 }

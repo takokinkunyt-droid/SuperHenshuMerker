@@ -6,6 +6,7 @@ import { formatTime, itemEnd, overlaps, projectDuration, rulerStep, trimStart } 
 import { playback } from '../media/playback';
 import { addTextItem, deleteItem, duplicateItem, splitAtPlayhead } from '../state/actions';
 import { AddButtons } from './MediaPanel';
+import { hasAnyEffect } from '../render/effects';
 
 const ROW_H = 40;
 const RULER_H = 28;
@@ -363,6 +364,11 @@ const Items = memo(function Items({
           <span className="tl-label">
             {KIND_ICON[item.kind]} {itemLabel(project, item)}
           </span>
+          {hasAnyEffect(item) && (
+            <span className="tl-fx" title="エフェクトあり">
+              ✨
+            </span>
+          )}
           <span className="tl-handle right" onPointerDown={(e) => onPointerDown(e, item, 'right')} />
         </div>
       ))}

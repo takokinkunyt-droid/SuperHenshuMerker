@@ -1,7 +1,7 @@
 import { useEditor } from '../state/store';
-import type { Placement, TextStyle, TimelineItem } from '../types';
+import type { AudioEffects, Placement, SlideDirection, TextStyle, TimelineItem, VisualEffects } from '../types';
 import { ASPECTS, FONT_FAMILIES, MIN_ITEM_DURATION, aspectOf, type AspectKey } from '../state/defaults';
-import { deleteItem, setAspect, updateItem } from '../state/actions';
+import { alignItem, deleteItem, setAspect, updateItem } from '../state/actions';
 import { ColorInput, CommitText, Field, NumberInput, SliderNumber } from './common';
 
 const KIND_TITLE: Record<TimelineItem['kind'], string> = {
@@ -75,6 +75,7 @@ function ItemInspector({ item }: { item: TimelineItem }) {
           <NumberInput value={item.layer} min={0} step={1} digits={0} onChange={(v) => update({ layer: Math.round(v) })} />
         </Field>
       </div>
+      {item.kind !== 'audio' && <AlignButtons id={item.id} />}
       {item.kind === 'text' && (
         <div className="form">
           <Field label="テキスト">
@@ -99,7 +100,166 @@ function ItemInspector({ item }: { item: TimelineItem }) {
           </Field>
         </div>
       )}
+      {item.kind !== 'audio' && (
+        <VisualEffectsEditor
+          value={item.effects ?? {}}
+          duration={item.duration}
+          onChange={(p) => update({ effects: { ...item.effects, ...p } } as Partial<TimelineItem>)}
+        />
+      )}
+      {(item.kind === 'video' || item.kind === 'audio') && (
+        <AudioEffectsEditor
+          value={item.audioEffects ?? {}}
+          duration={item.duration}
+          onChange={(p) => update({ audioEffects: { ...item.audioEffects, ...p } } as Partial<TimelineItem>)}
+        />
+      )}
     </>
+  );
+}
+
+/** 画面の端（余白5%）や中央にぴったり合わせるボタン */
+function AlignButtons({ id }: { id: string }) {
+  return (
+    <div className="align-grid" role="group" aria-label="配置をそろえる">
+      <span className="field-label">そろえる</span>
+      <div className="button-row">
+        <button className="btn small" title="左の余白に合わせる" onClick={() => alignItem(id, 'left', null)}>
+          ⇤ 左
+        </button>
+        <button className="btn small" title="左右の中央に合わせる" onClick={() => alignItem(id, 'center', null)}>
+          ↔ 中央
+        </button>
+        <button className="btn small" title="右の余白に合わせる" onClick={() => alignItem(id, 'right', null)}>
+          右 ⇥
+        </button>
+      </div>
+      <span />
+      <div className="button-row">
+        <button className="btn small" title="上の余白に合わせる" onClick={() => alignItem(id, null, 'top')}>
+          ⤒ 上
+        </button>
+        <button className="btn small" title="上下の中央に合わせる" onClick={() => alignItem(id, null, 'middle')}>
+          ↕ 中央
+        </button>
+        <button className="btn small" title="下の余白に合わせる" onClick={() => alignItem(id, null, 'bottom')}>
+          下 ⤓
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const SLIDE_LABELS: [SlideDirection, string][] = [
+  ['left', '左から'],
+  ['right', '右から'],
+  ['top', '上から'],
+  ['bottom', '下から'],
+];
+
+function VisualEffectsEditor({ value, duration, onChange }: { value: VisualEffects; duration: number; onChange: (p: Partial<VisualEffects>) => void }) {
+  const maxFade = Math.max(0.1, Math.min(10, duration));
+  const zoomMode = !value.zoomIn ? '' : value.zoomIn.from < 1 ? 'small' : 'large';
+  return (
+    <details className="effects" open>
+      <summary>映像エフェクト</summary>
+      <div className="form nested">
+        <Field label="ぼかし">
+          <SliderNumber value={value.blur ?? 0} min={0} max={40} step={1} digits={0} onChange={(blur) => onChange({ blur })} />
+        </Field>
+        <Field label="モザイク" hint="マスの大きさ（0でなし）">
+          <SliderNumber value={value.mosaic ?? 0} min={0} max={80} step={1} digits={0} onChange={(mosaic) => onChange({ mosaic })} />
+        </Field>
+        <Field label="フェードイン(秒)">
+          <SliderNumber value={value.fadeIn ?? 0} min={0} max={maxFade} step={0.1} onChange={(fadeIn) => onChange({ fadeIn })} />
+        </Field>
+        <Field label="フェードアウト(秒)">
+          <SliderNumber value={value.fadeOut ?? 0} min={0} max={maxFade} step={0.1} onChange={(fadeOut) => onChange({ fadeOut })} />
+        </Field>
+        <Field label="スライドイン" hint="画面の外から入ってくる">
+          <select
+            value={value.slideIn?.direction ?? ''}
+            onChange={(e) =>
+              onChange({
+                slideIn: e.target.value ? { direction: e.target.value as SlideDirection, duration: value.slideIn?.duration ?? 0.6 } : null,
+              })
+            }
+          >
+            <option value="">なし</option>
+            {SLIDE_LABELS.map(([d, label]) => (
+              <option key={d} value={d}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {value.slideIn && (
+          <Field label="スライドの時間(秒)">
+            <SliderNumber
+              value={value.slideIn.duration}
+              min={0.1}
+              max={maxFade}
+              step={0.1}
+              onChange={(d) => onChange({ slideIn: { ...value.slideIn!, duration: d } })}
+            />
+          </Field>
+        )}
+        <Field label="拡大縮小で入場">
+          <select
+            value={zoomMode}
+            onChange={(e) =>
+              onChange({
+                zoomIn: e.target.value
+                  ? { from: e.target.value === 'small' ? 0.2 : 2, duration: value.zoomIn?.duration ?? 0.6 }
+                  : null,
+              })
+            }
+          >
+            <option value="">なし</option>
+            <option value="small">小さい状態から拡大</option>
+            <option value="large">大きい状態から縮小</option>
+          </select>
+        </Field>
+        {value.zoomIn && (
+          <Field label="入場の時間(秒)">
+            <SliderNumber
+              value={value.zoomIn.duration}
+              min={0.1}
+              max={maxFade}
+              step={0.1}
+              onChange={(d) => onChange({ zoomIn: { ...value.zoomIn!, duration: d } })}
+            />
+          </Field>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function AudioEffectsEditor({ value, duration, onChange }: { value: AudioEffects; duration: number; onChange: (p: Partial<AudioEffects>) => void }) {
+  const maxFade = Math.max(0.1, Math.min(10, duration));
+  return (
+    <details className="effects" open>
+      <summary>音声エフェクト</summary>
+      <div className="form nested">
+        <Field label="低音強化(dB)">
+          <SliderNumber value={value.bass ?? 0} min={0} max={20} step={1} digits={0} onChange={(bass) => onChange({ bass })} />
+        </Field>
+        <Field label="ピー音" hint="元の音を消して「ピー」を鳴らす">
+          <input type="checkbox" checked={!!value.beep} onChange={(e) => onChange({ beep: e.target.checked })} />
+        </Field>
+        <Field label="ノイズ" hint="ザーッという音を混ぜる">
+          <SliderNumber value={value.noise ?? 0} min={0} max={1} step={0.05} onChange={(noise) => onChange({ noise })} />
+        </Field>
+        <Field label="フェードイン(秒)">
+          <SliderNumber value={value.fadeIn ?? 0} min={0} max={maxFade} step={0.1} onChange={(fadeIn) => onChange({ fadeIn })} />
+        </Field>
+        <Field label="フェードアウト(秒)">
+          <SliderNumber value={value.fadeOut ?? 0} min={0} max={maxFade} step={0.1} onChange={(fadeOut) => onChange({ fadeOut })} />
+        </Field>
+        <p className="muted small">一部だけピー音にしたいときは、その部分を「✂ 分割」で切り出してからピー音をオンにします。</p>
+      </div>
+    </details>
   );
 }
 

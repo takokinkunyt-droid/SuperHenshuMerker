@@ -176,6 +176,21 @@ button {
 .fit-buttons {
   margin-bottom: 8px;
 }
+.align-grid {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 6px 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+details.effects {
+  margin-bottom: 12px;
+}
+.tl-fx {
+  flex: none;
+  margin-right: 6px;
+  font-size: 11px;
+}
 
 /* ---------- layout ---------- */
 .app {
@@ -415,6 +430,29 @@ details .field + .field {
 }
 .preview-frame {
   position: relative;
+  overflow: hidden;
+}
+.selection-box {
+  position: absolute;
+  outline: 1px dashed rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.guide {
+  position: absolute;
+  pointer-events: none;
+  background: #ff3dcb;
+  z-index: 2;
+}
+.guide.vertical {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.guide.horizontal {
+  left: 0;
+  right: 0;
+  height: 1px;
 }
 .preview-empty {
   position: absolute;

@@ -6,7 +6,7 @@ import { media } from './mediaCache';
 
 class Playback {
   private ctx: AudioContext | null = null;
-  private nodes: AudioBufferSourceNode[] = [];
+  private nodes: AudioScheduledSourceNode[] = [];
   private startCtxTime = 0;
   private startTime = 0;
   private raf = 0;
