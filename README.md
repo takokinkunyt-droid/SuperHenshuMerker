@@ -40,14 +40,17 @@
 
 ### VOICEVOX との接続
 
-VOICEVOX エンジン（既定 `http://127.0.0.1:50021`）にブラウザから直接接続します。公開サイトから使う場合は、エンジンがそのページのオリジンからのアクセスを許可している必要があります。
+VOICEVOX エンジン（既定 `http://127.0.0.1:50021`）にブラウザから直接接続します。`localhost` 以外（GitHub Pages など）から使う場合は、エンジンがそのページのオリジンからのアクセスを許可している必要があります。
 
-```sh
-# 例：エンジンをコマンドで起動する場合
-run --allow_origin https://<このツールを置いたオリジン>
-# または
-run --cors_policy_mode all
-```
+1. VOICEVOX を起動したまま、ブラウザで `http://127.0.0.1:50021/setting` を開く
+2. 「Allow Origin」にツールのオリジン（例：`https://takokinkunyt-droid.github.io`）を入れて保存する
+3. VOICEVOX を再起動する
+
+エンジンをコマンドで起動する場合は `run --allow_origin https://takokinkunyt-droid.github.io` でも同じです。ブラウザに「ローカルネットワークへのアクセス」の確認が出たら許可してください。
+
+## 公開（GitHub Pages）
+
+`.github/workflows/deploy-pages.yml` により、デフォルトブランチへプッシュするたびにビルドして GitHub Pages に公開します。初回だけ、リポジトリの Settings → Pages → Build and deployment の Source を「GitHub Actions」にしてください。公開先は `https://takokinkunyt-droid.github.io/SuperHenshuMerker/` です。
 
 VOICEVOX の音声を使った動画には `VOICEVOX:キャラ名` のクレジット表記が必要です。各キャラクターの利用規約も確認してください。読み込んだ音声ファイルの利用条件は、その音声の作成元の規約に従ってください。
 

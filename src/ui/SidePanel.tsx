@@ -147,9 +147,14 @@ function VoiceSettingsEditor({ ch }: { ch: Character }) {
         <div className="notice error">
           <p>{error}</p>
           <p>
-            VOICEVOX（エンジン）を起動し、このページからの接続を許可してください。コマンドで起動する場合の例：
-            <code>run --allow_origin {location.origin}</code>
-            ／または <code>--cors_policy_mode all</code>
+            VOICEVOXを起動したまま、エンジンの設定ページ{' '}
+            <a href={`${voicevoxUrl()}/setting`} target="_blank" rel="noreferrer">
+              {voicevoxUrl()}/setting
+            </a>{' '}
+            を開き、「Allow Origin」に <code>{location.origin}</code> を入れて保存し、VOICEVOXを再起動してください。
+          </p>
+          <p>
+            コマンドで起動する場合は <code>run --allow_origin {location.origin}</code>。ブラウザに「ローカルネットワークへのアクセス」の確認が出たら許可してください。
           </p>
           <p>iPad・Chromebookなど VOICEVOX が動かない環境では、「音声ファイルを割り当て」を使ってください。</p>
         </div>
