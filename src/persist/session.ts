@@ -43,7 +43,8 @@ function switchTo(project: Project) {
 }
 
 export async function boot(): Promise<void> {
-  useSaveStatus.setState({ persisted: await requestPersistentStorage() });
+  // Firefoxは許可の確認ダイアログに答えるまで結果が返らないので、起動を待たせない
+  void requestPersistentStorage().then((persisted) => useSaveStatus.setState({ persisted }));
   let project: Project | null = null;
   try {
     const id = await lastProjectId();
