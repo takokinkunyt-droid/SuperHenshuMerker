@@ -2,7 +2,7 @@
 import type { AssetKind, AssetMeta } from '../types';
 import { uid } from '../state/defaults';
 import { putAsset } from '../persist/assetStorage';
-import { decodeAudio, media } from './mediaCache';
+import { decodeAudioFile, media } from './mediaCache';
 
 const EXT_KIND: Record<string, AssetKind> = {
   png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', bmp: 'image', svg: 'image',
@@ -54,7 +54,7 @@ export async function importBlob(projectId: string, blob: Blob, name: string): P
     meta.height = bmp.height;
     bmp.close();
   } else if (kind === 'audio') {
-    const buffer = await decodeAudio(blob);
+    const buffer = await decodeAudioFile(blob);
     meta.duration = buffer.duration;
     media.setAudio(meta.id, buffer);
   } else {

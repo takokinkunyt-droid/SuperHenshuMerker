@@ -1,41 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../state/store';
-import { buildCredits, checkExportSupport, exportVideo, type ExportSupport } from '../export/exporter';
+import { checkExportSupport, exportVideo, outputSize, type ExportSupport } from '../export/exporter';
 import { downloadBlob, safeFileName } from '../persist/session';
 import { playback } from '../media/playback';
 import { formatTime, projectDuration } from '../state/timeline';
 import { Modal } from './common';
 
-type Phase = { kind: 'idle' } | { kind: 'running'; ratio: number; label: string } | { kind: 'done'; seconds: number; saved: string } | { kind: 'error'; message: string };
+type Phase =
+  | { kind: 'idle' }
+  | { kind: 'running'; ratio: number; label: string }
+  | { kind: 'done'; seconds: number; file: File | null; savedName: string }
+  | { kind: 'error'; message: string };
 
 function describe(s: ExportSupport): string {
-  if (!s.webCodecs) return 'このブラウザはWebCodecsに対応していないため書き出せません。';
+  if (!s.webCodecs) return 'このブラウザは動画の書き出し（WebCodecs）に対応していません。最新のChrome・Edge・Safariを使ってください。';
   if (!s.video) return 'このブラウザでは動画をエンコードできません。';
   if (s.container === 'mp4') {
     return s.audio === 'aac'
       ? 'MP4（H.264 + AAC）で書き出します。'
-      : 'MP4（H.264 + AAC）で書き出します。このブラウザはAACに対応していないため、音声は内蔵のWASMエンコーダーで変換します（少し時間がかかります）。';
+      : 'MP4（H.264 + AAC）で書き出します。このブラウザはAACに対応していないため、音声は内蔵のエンコーダーで変換します（少し時間がかかります）。';
   }
   return `このブラウザはH.264に対応していないため、WebM（${s.video?.toUpperCase()}${s.audio ? ' + Opus' : '、音声なし'}）で書き出します。`;
 }
 
 const canPickFile = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
+/** スマホなど、ファイルの共有（写真アプリへの保存など）ができる環境か */
+const canShareFile = (file: File) => typeof navigator !== 'undefined' && !!navigator.canShare?.({ files: [file] });
+/** 指で操作する端末（スマホ・タブレット）か */
+const isTouchDevice = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useEditor((s) => s.project);
   const [support, setSupport] = useState<ExportSupport | null>(null);
-  const [height, setHeight] = useState(1080);
-  const [direct, setDirect] = useState(canPickFile);
+  const [shortSide, setShortSide] = useState(1080);
+  const [direct, setDirect] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const duration = projectDuration(project);
-  const credits = buildCredits(project);
-  const missing = project.items.filter((it) => it.kind === 'voice' && !it.audioAssetId).length;
+  const size = outputSize(project, shortSide);
 
   useEffect(() => {
-    void checkExportSupport(Math.round((project.width * height) / project.height), height, project.fps).then(setSupport);
-  }, [height, project.width, project.height, project.fps]);
+    void checkExportSupport(size.width, size.height, project.fps).then(setSupport);
+  }, [size.width, size.height, project.fps]);
 
   const start = async () => {
     playback.pause();
@@ -57,13 +63,17 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     setPhase({ kind: 'running', ratio: 0, label: '準備中…' });
     try {
       const result = await exportVideo(project, {
-        height,
+        shortSide,
         fileHandle,
         signal: abort.signal,
         onProgress: (ratio, label) => setPhase({ kind: 'running', ratio, label }),
       });
-      if (result.blob) downloadBlob(result.blob, `${safeFileName(project.name)}.${result.extension}`);
-      setPhase({ kind: 'done', seconds: result.seconds, saved: fileHandle ? fileHandle.name : `${safeFileName(project.name)}.${result.extension}` });
+      const name = `${safeFileName(project.name)}.${result.extension}`;
+      const file = result.blob ? new File([result.blob], name, { type: result.blob.type }) : null;
+      // パソコンではそのままダウンロード。スマホはボタンから保存・共有してもらう
+      // （時間のかかる処理のあとの自動ダウンロードは、スマホのブラウザに止められることがあるため）
+      if (file && !isTouchDevice()) downloadBlob(file, name);
+      setPhase({ kind: 'done', seconds: result.seconds, file, savedName: fileHandle ? fileHandle.name : name });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setPhase({ kind: 'error', message });
@@ -80,12 +90,11 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           長さ <strong>{formatTime(duration, project.fps)}</strong> ・ {project.fps}fps
         </p>
         <p className={support && !support.video ? 'notice error' : 'muted'}>{support ? describe(support) : '対応状況を確認中…'}</p>
-        {missing > 0 && <p className="notice">音声が未設定のセリフが{missing}個あります（字幕のみで書き出されます）。</p>}
         <label className="field">
-          <span className="field-label">解像度</span>
-          <select value={height} disabled={running} onChange={(e) => setHeight(Number(e.target.value))}>
-            <option value={1080}>1080p（1920×1080）</option>
-            <option value={720}>720p（1280×720・速い）</option>
+          <span className="field-label">画質</span>
+          <select value={shortSide} disabled={running} onChange={(e) => setShortSide(Number(e.target.value))}>
+            <option value={1080}>フルHD（{outputSize(project, 1080).width}×{outputSize(project, 1080).height}）</option>
+            <option value={720}>HD（{outputSize(project, 720).width}×{outputSize(project, 720).height}・速い）</option>
           </select>
         </label>
         {canPickFile && (
@@ -106,13 +115,30 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             <span>
               {(phase.ratio * 100).toFixed(0)}% — {phase.label}
             </span>
+            <span className="muted small">書き出し中は画面を閉じたり、別のアプリに切り替えたりしないでください。</span>
           </div>
         )}
         {phase.kind === 'done' && (
-          <p className="notice ok">
-            書き出しが完了しました（{phase.saved}）。所要時間 {phase.seconds.toFixed(1)}秒（動画の長さの
-            {(phase.seconds / Math.max(0.01, duration)).toFixed(2)}倍）
-          </p>
+          <>
+            <p className="notice ok">
+              書き出しが完了しました（{phase.savedName}）。所要時間 {phase.seconds.toFixed(1)}秒
+            </p>
+            {phase.file && (
+              <div className="button-row">
+                {canShareFile(phase.file) && (
+                  <button
+                    className="btn primary"
+                    onClick={() => void navigator.share({ files: [phase.file!], title: project.name }).catch(() => undefined)}
+                  >
+                    共有・写真に保存
+                  </button>
+                )}
+                <button className="btn" onClick={() => downloadBlob(phase.file!, phase.file!.name)}>
+                  ファイルとして保存
+                </button>
+              </div>
+            )}
+          </>
         )}
         {phase.kind === 'error' && <p className="notice error">{phase.message}</p>}
 
@@ -123,34 +149,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             </button>
           ) : (
             <button className="btn primary" disabled={!support?.video || duration <= 0} onClick={() => void start()}>
-              書き出し開始
+              {phase.kind === 'done' ? 'もう一度書き出す' : '書き出し開始'}
             </button>
           )}
           <button className="btn" disabled={running} onClick={onClose}>
             閉じる
           </button>
         </div>
-
-        <h4>クレジット表記</h4>
-        {credits ? (
-          <>
-            <p className="muted small">動画の概要欄などに記載してください。キャラクターごとの利用規約も確認してください。</p>
-            <textarea readOnly rows={Math.min(6, credits.split('\n').length + 1)} value={credits} />
-            <button
-              className="btn small"
-              onClick={() => {
-                void navigator.clipboard.writeText(credits).then(() => setCopied(true));
-              }}
-            >
-              {copied ? 'コピーしました' : 'コピー'}
-            </button>
-            <p className="muted small">
-              規約：<a href="https://voicevox.hiroshiba.jp/term/" target="_blank" rel="noreferrer">VOICEVOX 利用規約</a>
-            </p>
-          </>
-        ) : (
-          <p className="muted small">VOICEVOXの音声は使われていません。読み込んだ音声・素材の利用条件は各提供元の規約に従ってください。</p>
-        )}
+        <p className="muted small">使った音楽・映像の利用条件（著作権・クレジット表記など）は、それぞれの提供元の規約に従ってください。</p>
       </div>
     </Modal>
   );

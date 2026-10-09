@@ -192,6 +192,3 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
     </div>
   );
 }
-
-export const AUDIO_NOTICE =
-  '読み込んだ音声の利用条件（商用利用・クレジット表記など）は、その音声を作ったサービスやソフトの規約に従ってください。';

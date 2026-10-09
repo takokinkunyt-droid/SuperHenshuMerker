@@ -92,6 +92,9 @@ hr {
 }
 
 /* ---------- buttons ---------- */
+button {
+  touch-action: manipulation;
+}
 .btn {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -156,12 +159,29 @@ hr {
 .spacer {
   flex: 1;
 }
+.button-row.stack {
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+.add-btn {
+  font-weight: 600;
+}
+.toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 2px;
+}
+.fit-buttons {
+  margin-bottom: 8px;
+}
 
 /* ---------- layout ---------- */
 .app {
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto minmax(170px, 32vh);
+  grid-template-rows: auto auto minmax(0, 1fr) minmax(200px, 36vh);
   /* 幅の広いタイムラインに列幅を引き伸ばされないようにする */
   grid-template-columns: minmax(0, 1fr);
   position: relative;
@@ -176,11 +196,8 @@ hr {
 .app > .workspace {
   grid-row: 3;
 }
-.app > .line-input {
-  grid-row: 4;
-}
 .app > .timeline {
-  grid-row: 5;
+  grid-row: 4;
 }
 .header {
   display: flex;
@@ -229,8 +246,7 @@ hr {
 }
 .panel.side {
   border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
+  padding: 10px;
 }
 .panel.inspector {
   border-left: 1px solid var(--line);
@@ -243,31 +259,6 @@ hr {
   margin: 0 0 8px;
   font-size: 14px;
 }
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
-  background: var(--panel);
-  z-index: 1;
-}
-.tabs button {
-  flex: 1;
-  padding: 8px 4px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--muted);
-  border-bottom: 2px solid transparent;
-}
-.tabs button.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.tab-body {
-  padding: 10px;
-}
-
 /* ---------- forms ---------- */
 .form {
   display: flex;
@@ -367,77 +358,7 @@ details .field + .field {
   color: var(--danger);
 }
 
-/* ---------- chips ---------- */
-.chips,
-.line-chars {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.chip {
-  --chip-color: #777;
-  border: 1px solid var(--chip-color);
-  background: transparent;
-  border-radius: 999px;
-  padding: 3px 12px;
-  cursor: pointer;
-}
-.chip.active {
-  background: var(--chip-color);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-.chip.add {
-  border-style: dashed;
-  border-color: var(--muted);
-}
-
-/* ---------- tachie parts ---------- */
-.parts-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin: 6px 0;
-}
-.part-slot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.part-thumb {
-  width: 100%;
-  aspect-ratio: 1;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  background: repeating-conic-gradient(#262a33 0 25%, #1f222a 0 50%) 0 0 / 14px 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 20px;
-}
-.part-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.part-label {
-  font-size: 11px;
-  color: var(--muted);
-}
-.tachie-parts {
-  margin-bottom: 8px;
-}
-
-/* ---------- script / assets ---------- */
-textarea.script {
-  font-size: 13px;
-  line-height: 1.6;
-}
+/* ---------- assets ---------- */
 .asset-list {
   list-style: none;
   padding: 0;
@@ -488,9 +409,25 @@ textarea.script {
   container-type: size;
 }
 .preview-frame {
-  width: min(100cqw, calc(100cqh * 16 / 9));
+  width: min(100cqw, calc(100cqh * var(--aspect, 1.7778)));
   max-height: 100cqh;
   box-shadow: 0 0 0 1px var(--line);
+}
+.preview-frame {
+  position: relative;
+}
+.preview-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  pointer-events: none;
 }
 .preview-frame canvas {
   width: 100%;
@@ -499,6 +436,7 @@ textarea.script {
 }
 .preview-frame canvas.draggable {
   cursor: move;
+  touch-action: none;
 }
 .transport {
   display: flex;
@@ -534,31 +472,6 @@ textarea.script {
   width: auto;
 }
 
-/* ---------- line input ---------- */
-.line-input {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-}
-.line-input .line-chars {
-  margin: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  max-width: 40%;
-}
-.line-input .line-text {
-  flex: 1;
-  font-size: 14px;
-  padding: 6px 10px;
-}
-.busy {
-  color: var(--warn);
-  white-space: nowrap;
-}
-
 /* ---------- timeline ---------- */
 .timeline {
   display: flex;
@@ -573,6 +486,10 @@ textarea.script {
   gap: 6px;
   padding: 4px 8px;
   border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.timeline-toolbar > * {
+  flex-shrink: 0;
 }
 .timeline-toolbar .hint {
   color: var(--muted);
@@ -615,6 +532,7 @@ textarea.script {
   background: var(--panel-2);
   border-bottom: 1px solid var(--line);
   cursor: ew-resize;
+  touch-action: none;
 }
 .tick {
   position: absolute;
@@ -652,18 +570,24 @@ textarea.script {
   cursor: grab;
   display: flex;
   align-items: center;
-  touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .tl-item:active {
   cursor: grabbing;
 }
-.tl-item.kind-tachie {
-  background: color-mix(in srgb, var(--item-color) 22%, #1a1c22);
-  border-style: dashed;
+.tl-item.kind-video {
+  --item-color: #7a4fd1;
 }
-.tl-item.no-audio {
-  background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgba(0, 0, 0, 0.18) 6px 12px);
+.tl-item.kind-image {
+  --item-color: #3a7bd5;
+}
+.tl-item.kind-audio {
+  --item-color: #2f9e8f;
+}
+.tl-item.kind-text {
+  --item-color: #b08d2c;
 }
 .tl-item.selected {
   outline: 2px solid #fff;
@@ -701,11 +625,43 @@ textarea.script {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: #ff4d4f;
-  pointer-events: none;
+  width: 0;
   z-index: 4;
+  pointer-events: none;
+}
+.playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: #ff4d4f;
+}
+/* 線そのものをつかめるように、見た目より広い当たり判定を付ける */
+.playhead-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 16px;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.playhead-knob {
+  position: absolute;
+  top: 3px;
+  left: -9px;
+  z-index: 1;
+  width: 18px;
+  height: 22px;
+  background: #ff4d4f;
+  border-radius: 4px 4px 9px 9px;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* ---------- modal ---------- */
@@ -830,10 +786,29 @@ textarea.script {
   border-left-color: var(--danger);
 }
 
-/* ---------- narrow screens (tablet portrait / phone) ---------- */
+/* ---------- touch devices ---------- */
+@media (pointer: coarse) {
+  .btn,
+  .icon-btn {
+    min-height: 36px;
+  }
+  /* 指で触る端のつまみは、選んだアイテムにだけ大きめに出す */
+  .tl-handle {
+    width: 16px;
+  }
+  .tl-item:not(.selected) .tl-handle {
+    display: none;
+  }
+  .tl-item.selected .tl-handle {
+    background: rgba(255, 255, 255, 0.35);
+    touch-action: none;
+  }
+}
+
+/* ---------- narrow screens (tablet portrait) ---------- */
 @media (max-width: 1100px) {
   .workspace {
-    grid-template-columns: 290px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
   .panel.side {
@@ -852,42 +827,121 @@ textarea.script {
     grid-column: 2;
   }
 }
+
+/* ---------- phones ---------- */
 @media (max-width: 760px) {
   html,
   body,
   #root {
     overflow: auto;
+    height: auto;
+    min-height: 100%;
   }
   .app {
     height: auto;
-    min-height: 100%;
-    grid-template-rows: auto auto auto auto 300px;
+    min-height: 100dvh;
+    grid-template-rows: none;
+    grid-auto-rows: auto;
   }
+  /* 縦に「プレビュー → タイムライン → 設定 → 素材」と並べる */
   .workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
+    display: contents;
+  }
+  .app > .header {
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .app > .banner {
+    grid-row: 2;
   }
   .workspace > .preview-panel {
-    grid-row: 1;
+    grid-row: 3;
     grid-column: 1;
+    position: sticky;
+    top: 49px;
+    z-index: 5;
+  }
+  .app > .timeline {
+    grid-row: 4;
+    height: 46vh;
     min-height: 260px;
   }
-  .panel.side {
-    grid-row: 2;
-    max-height: 60vh;
-  }
   .panel.inspector {
-    grid-row: 3;
-    border-right: none;
+    grid-row: 5;
+    grid-column: 1;
+    border: none;
+    border-top: 1px solid var(--line);
+    overflow: visible;
+  }
+  .panel.side {
+    grid-row: 6;
+    grid-column: 1;
+    border: none;
+    border-top: 1px solid var(--line);
+    overflow: visible;
+  }
+  .preview-stage {
+    flex: none;
+    height: 34vh;
+    padding: 6px;
+  }
+  .header {
+    gap: 4px;
+    padding: 6px;
   }
   .brand span,
+  .help-label,
+  .quality-label,
+  .save-status,
   .timeline-toolbar .hint {
     display: none;
   }
-  .line-input {
-    flex-wrap: wrap;
+  .brand {
+    margin-right: 0;
   }
-  .line-input .line-chars {
-    max-width: 100%;
+  .project-btn {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+  .project-name {
+    display: inline-block;
+    max-width: 30vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+  }
+  .quality {
+    font-size: 11px;
+  }
+  .timeline-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding: 6px;
+  }
+  .timeline-toolbar .spacer {
+    flex: 0 0 4px;
+  }
+  .modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .modal,
+  .modal.wide {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: 14px 14px 0 0;
+  }
+  .field,
+  .modal .field {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  input[type='text'],
+  input[type='number'],
+  select,
+  textarea {
+    font-size: 16px; /* iOSで入力時に勝手に拡大されないように */
   }
 }

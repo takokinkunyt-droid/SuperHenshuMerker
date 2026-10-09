@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createProject } from '../src/state/defaults';
-import {
-  ensureTachieCovers,
-  estimateDuration,
-  findFreeLayer,
-  itemEnd,
-  nextVoiceStart,
-  parseScript,
-  rippleAfter,
-  splitItem,
-  trimStart,
-  createVoiceItem,
-} from '../src/state/timeline';
-import type { AudioItem, TachieItem, VoiceItem } from '../src/types';
+import { createProject, defaultTextStyle } from '../src/state/defaults';
+import { findFreeLayer, recenterItems, splitItem, trimStart } from '../src/state/timeline';
+import { migrateProject } from '../src/persist/migrate';
+import { outputSize } from '../src/export/exporter';
+import { wrapLines } from '../src/render/renderer';
+import type { AudioItem, ImageItem, TextItem } from '../src/types';
 
 const audio = (over: Partial<AudioItem> = {}): AudioItem => ({
   kind: 'audio', id: 'a', assetId: 'x', layer: 0, start: 1, duration: 4, sourceOffset: 0.5, volume: 1, ...over,
@@ -50,60 +42,54 @@ describe('findFreeLayer', () => {
   });
 });
 
-describe('parseScript', () => {
-  const p = createProject();
-  const [a, b] = p.characters;
-
-  it('assigns lines by name prefix and carries the speaker forward', () => {
-    const lines = parseScript(`${a.name}：こんにちは\n続きの行\n\n${b.name}: やあ\n`, p.characters, a.id);
-    expect(lines).toEqual([
-      { characterId: a.id, text: 'こんにちは' },
-      { characterId: a.id, text: '続きの行' },
-      { characterId: b.id, text: 'やあ' },
-    ]);
+describe('aspect ratio', () => {
+  it('creates vertical projects', () => {
+    expect(createProject('x', '9:16')).toMatchObject({ width: 1080, height: 1920 });
   });
 
-  it('keeps colons that are not a known character name', () => {
-    const lines = parseScript('時刻：12時です', p.characters, b.id);
-    expect(lines).toEqual([{ characterId: b.id, text: '時刻：12時です' }]);
+  it('keeps centered media centered and bottom text near the bottom when switching 16:9 -> 9:16', () => {
+    const p = createProject('x', '16:9');
+    const img: ImageItem = { kind: 'image', id: 'i', assetId: 'a', layer: 0, start: 0, duration: 5, x: 960, y: 540, scale: 1, opacity: 1 };
+    const text: TextItem = { kind: 'text', id: 't', layer: 1, start: 0, duration: 5, text: 'a', style: defaultTextStyle(1920, 1080) };
+    p.items.push(img, text);
+    p.width = 1080;
+    p.height = 1920;
+    recenterItems(p, 1920, 1080);
+    expect(img).toMatchObject({ x: 540, y: 960 });
+    expect(1920 - text.style.y).toBeCloseTo(1080 - defaultTextStyle(1920, 1080).y);
+    expect(text.style.x).toBe(540);
+    expect(text.style.maxWidth).toBeLessThanOrEqual(1080 * 0.9);
+  });
+
+  it('computes the export size from the short side', () => {
+    expect(outputSize({ width: 1080, height: 1920 }, 720)).toEqual({ width: 720, height: 1280 });
+    expect(outputSize({ width: 1920, height: 1080 }, 720)).toEqual({ width: 1280, height: 720 });
   });
 });
 
-describe('voice placement', () => {
-  it('places new lines after the last one and creates a covering tachie item', () => {
-    const p = createProject();
-    const ch = p.characters[0];
-    const v1 = createVoiceItem(p, ch.id, 'あいうえお', 0, 2);
-    p.items.push(v1);
-    ensureTachieCovers(p, ch.id, v1.start, itemEnd(v1));
-    expect(nextVoiceStart(p)).toBeCloseTo(2.2);
-
-    const v2 = createVoiceItem(p, ch.id, 'かきくけこ', 2.2, 1);
-    p.items.push(v2);
-    ensureTachieCovers(p, ch.id, v2.start, itemEnd(v2));
-
-    const tachies = p.items.filter((it): it is TachieItem => it.kind === 'tachie');
-    expect(tachies).toHaveLength(1);
-    expect(tachies[0].start).toBe(0);
-    expect(itemEnd(tachies[0])).toBeCloseTo(3.2);
+describe('migrateProject', () => {
+  it('turns old voice lines into audio + text and drops tachie items', () => {
+    const p = migrateProject({
+      id: 'p', width: 1920, height: 1080, assets: {},
+      characters: [{ id: 'c', subtitle: defaultTextStyle(1920, 1080, { color: '#ff0000' }) }],
+      items: [
+        { kind: 'voice', id: 'v', layer: 5, start: 1, duration: 2, characterId: 'c', text: 'こんにちは', audioAssetId: 'w', audioOffset: 0, volume: 1, showSubtitle: true },
+        { kind: 'tachie', id: 't', layer: 1, start: 0, duration: 3, characterId: 'c' },
+        { kind: 'image', id: 'i', layer: 0, start: 0, duration: 3, assetId: 'a', x: 0, y: 0, scale: 1, opacity: 1 },
+      ],
+    });
+    expect(p.version).toBe(2);
+    expect(p.items.map((it) => it.kind).sort()).toEqual(['audio', 'image', 'text']);
+    const text = p.items.find((it) => it.kind === 'text') as TextItem;
+    expect(text).toMatchObject({ text: 'こんにちは', start: 1, duration: 2 });
+    expect(text.style.color).toBe('#ff0000');
   });
+});
 
-  it('ripples later items when a line gets longer', () => {
-    const p = createProject();
-    const ch = p.characters[0];
-    const v1 = createVoiceItem(p, ch.id, 'a', 0, 1);
-    const v2 = createVoiceItem(p, ch.id, 'b', 1.2, 1);
-    p.items.push(v1, v2);
-    ensureTachieCovers(p, ch.id, 0, 2.2);
-    v1.duration = 1.5;
-    rippleAfter(p, 1, 0.5, v1.id);
-    expect((p.items.find((it) => it.id === v2.id) as VoiceItem).start).toBeCloseTo(1.7);
-    const tachie = p.items.find((it) => it.kind === 'tachie')!;
-    expect(itemEnd(tachie)).toBeCloseTo(2.7);
-  });
-
-  it('estimates a minimum duration for short text', () => {
-    expect(estimateDuration('あ')).toBe(1);
-    expect(estimateDuration('あいうえおかきくけこさしすせそ')).toBeGreaterThan(2);
+describe('wrapLines', () => {
+  it('wraps by width and respects newlines', () => {
+    const measure = (s: string) => [...s].length * 10;
+    expect(wrapLines(measure, 'あいうえおかきくけこ', 40)).toEqual(['あいうえ', 'おかきく', 'けこ']);
+    expect(wrapLines(measure, 'ab\ncd', 100)).toEqual(['ab', 'cd']);
   });
 });

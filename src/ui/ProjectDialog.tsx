@@ -3,6 +3,7 @@ import { useEditor } from '../state/store';
 import { deleteProject, listProjects, type ProjectSummary } from '../persist/projects';
 import { downloadProjectZip, importZipFile, newProject, openProject, useSaveStatus } from '../persist/session';
 import { FileButton, Modal } from './common';
+import { ASPECTS } from '../state/defaults';
 
 export function ProjectDialog({ onClose }: { onClose: () => void }) {
   const current = useEditor((s) => s.project.id);
@@ -24,9 +25,11 @@ export function ProjectDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="プロジェクト" onClose={onClose} wide>
       <div className="button-row">
-        <button className="btn primary" onClick={() => run(newProject)}>
-          新規プロジェクト
-        </button>
+        {ASPECTS.map((a) => (
+          <button key={a.key} className="btn primary" onClick={() => run(() => newProject(a.key))}>
+            ＋ 新規 {a.key}
+          </button>
+        ))}
         <button className="btn" onClick={() => run(downloadProjectZip)}>
           現在のプロジェクトをZIPで保存
         </button>

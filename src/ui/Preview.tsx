@@ -5,7 +5,7 @@ import { previewSource, syncVideos } from '../render/previewSource';
 import { media } from '../media/mediaCache';
 import { playback } from '../media/playback';
 import { formatTime, projectDuration } from '../state/timeline';
-import type { Project, TimelineItem } from '../types';
+import type { TimelineItem } from '../types';
 
 const QUALITY_KEY = 'shm.previewScale';
 
@@ -18,14 +18,10 @@ function loadQuality(): number {
 }
 
 /** プレビュー上でドラッグして動かせる位置を返す */
-function positionOf(project: Project, item: TimelineItem | undefined): { x: number; y: number } | null {
+function positionOf(item: TimelineItem | undefined): { x: number; y: number } | null {
   if (!item) return null;
   if (item.kind === 'image' || item.kind === 'video') return { x: item.x, y: item.y };
   if (item.kind === 'text') return { x: item.style.x, y: item.style.y };
-  const ch = 'characterId' in item ? project.characters.find((c) => c.id === item.characterId) : undefined;
-  if (!ch) return null;
-  if (item.kind === 'tachie') return { x: ch.tachieX, y: ch.tachieY };
-  if (item.kind === 'voice') return { x: ch.subtitle.x, y: ch.subtitle.y };
   return null;
 }
 
@@ -35,12 +31,6 @@ function applyPosition(id: string, x: number, y: number) {
     if (!item) return;
     if (item.kind === 'image' || item.kind === 'video') Object.assign(item, { x, y });
     else if (item.kind === 'text') Object.assign(item.style, { x, y });
-    else if (item.kind === 'tachie' || item.kind === 'voice') {
-      const ch = d.characters.find((c) => c.id === item.characterId);
-      if (!ch) return;
-      if (item.kind === 'tachie') Object.assign(ch, { tachieX: x, tachieY: y });
-      else Object.assign(ch.subtitle, { x, y });
-    }
   });
 }
 
@@ -98,12 +88,15 @@ export function Preview() {
   };
 
   const selected = useEditor((s) => s.project.items.find((it) => it.id === s.selectedItemId));
-  const pos = positionOf(project, selected);
+  const pos = positionOf(selected);
 
   return (
     <div className="preview-panel">
       <div className="preview-stage">
-        <div className="preview-frame" style={{ aspectRatio: `${project.width} / ${project.height}` }}>
+        <div
+          className="preview-frame"
+          style={{ aspectRatio: `${project.width} / ${project.height}`, ['--aspect' as string]: project.width / project.height }}
+        >
           <canvas
             ref={canvasRef}
             className={pos ? 'draggable' : ''}
@@ -126,6 +119,13 @@ export function Preview() {
               editorState().endGesture();
             }}
           />
+          {project.items.length === 0 && (
+            <div className="preview-empty">
+              下の「🎞 動画・画像」「🎵 音楽」「T テキスト」から追加してください
+              <br />
+              （ファイルをここへドラッグ＆ドロップしてもOK）
+            </div>
+          )}
         </div>
       </div>
       <div className="transport">
@@ -150,7 +150,7 @@ export function Preview() {
         </span>
         <span className="spacer" />
         <label className="quality">
-          プレビュー画質
+          <span className="quality-label">プレビュー画質</span>
           <select
             value={quality}
             onChange={(e) => {
@@ -163,9 +163,9 @@ export function Preview() {
               }
             }}
           >
-            <option value={0.25}>低（1/4）</option>
-            <option value={0.5}>中（1/2）</option>
-            <option value={1}>高（等倍）</option>
+            <option value={0.25}>画質：低</option>
+            <option value={0.5}>画質：中</option>
+            <option value={1}>画質：高</option>
           </select>
         </label>
       </div>

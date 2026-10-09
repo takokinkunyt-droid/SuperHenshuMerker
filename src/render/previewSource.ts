@@ -14,9 +14,6 @@ export const previewSource: FrameSource = {
     if (!v || v.readyState < 2) return null;
     return { source: v, width: v.videoWidth, height: v.videoHeight } satisfies Drawable;
   },
-  lipLevel(assetId, t) {
-    return media.lipLevel(assetId, t);
-  },
 };
 
 /** 動画要素の再生位置をタイムラインに合わせる */

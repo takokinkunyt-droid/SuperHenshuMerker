@@ -19,7 +19,6 @@ interface EditorState {
   gestureBase: Project | null;
 
   selectedItemId: string | null;
-  selectedCharacterId: string | null;
   currentTime: number;
   playing: boolean;
   pxPerSec: number;
@@ -37,7 +36,6 @@ interface EditorState {
   loadProject: (project: Project) => void;
 
   selectItem: (id: string | null) => void;
-  selectCharacter: (id: string | null) => void;
   setTime: (t: number) => void;
   setPlaying: (playing: boolean) => void;
   setPxPerSec: (v: number) => void;
@@ -59,7 +57,6 @@ export const useEditor = create<EditorState>()((set, get) => ({
   future: [],
   gestureBase: null,
   selectedItemId: null,
-  selectedCharacterId: null,
   currentTime: 0,
   playing: false,
   pxPerSec: 80,
@@ -124,13 +121,11 @@ export const useEditor = create<EditorState>()((set, get) => ({
       future: [],
       gestureBase: null,
       selectedItemId: null,
-      selectedCharacterId: project.characters[0]?.id ?? null,
       currentTime: 0,
       playing: false,
     }),
 
   selectItem: (id) => set({ selectedItemId: id }),
-  selectCharacter: (id) => set({ selectedCharacterId: id }),
   setTime: (t) => set({ currentTime: Math.max(0, t) }),
   setPlaying: (playing) => set({ playing }),
   setPxPerSec: (v) => set({ pxPerSec: Math.min(600, Math.max(5, v)) }),

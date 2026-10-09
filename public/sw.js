@@ -1,5 +1,5 @@
 // スーパー編集メーカー service worker: アプリ本体をキャッシュしてオフラインでも起動できるようにする。
-const CACHE = 'shm-v1';
+const CACHE = 'shm-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));

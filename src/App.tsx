@@ -3,10 +3,9 @@ import { editorState, useEditor } from './state/store';
 import { useSaveStatus } from './persist/session';
 import { deleteItem, duplicateItem, importAndPlace, splitAtPlayhead } from './state/actions';
 import { playback } from './media/playback';
-import { SidePanel } from './ui/SidePanel';
+import { MediaPanel } from './ui/MediaPanel';
 import { Preview } from './ui/Preview';
 import { Inspector } from './ui/Inspector';
-import { LineInput } from './ui/LineInput';
 import { Timeline } from './ui/Timeline';
 import { ProjectDialog } from './ui/ProjectDialog';
 import { AboutDialog } from './ui/AboutDialog';
@@ -111,8 +110,8 @@ export function App() {
           <img src="./icon.svg" alt="" width={26} height={26} />
           <span>スーパー編集メーカー</span>
         </div>
-        <button className="btn ghost" onClick={() => setDialog('project')} title="プロジェクトの切り替え・保存">
-          📁 {projectName}
+        <button className="btn ghost project-btn" onClick={() => setDialog('project')} title="プロジェクトの切り替え・保存">
+          📁 <span className="project-name">{projectName}</span>
         </button>
         <span className={`save-status ${saveStatus}`}>{SAVE_LABEL[saveStatus]}</span>
         <span className="spacer" />
@@ -122,8 +121,8 @@ export function App() {
         <button className="icon-btn" disabled={!canRedo} onClick={() => editorState().redo()} title="やり直す (Ctrl+Shift+Z)">
           ↷
         </button>
-        <button className="btn ghost" onClick={() => setDialog('about')}>
-          ？ 使い方
+        <button className="btn ghost" onClick={() => setDialog('about')} aria-label="使い方">
+          ？<span className="help-label"> 使い方</span>
         </button>
         <button className="btn primary" onClick={() => setDialog('export')}>
           書き出し
@@ -138,11 +137,10 @@ export function App() {
         </div>
       )}
       <main className="workspace">
-        <SidePanel />
+        <MediaPanel />
         <Preview />
         <Inspector />
       </main>
-      <LineInput />
       <Timeline />
 
       {dialog === 'export' && (

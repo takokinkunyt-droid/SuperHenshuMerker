@@ -1,8 +1,7 @@
-// 素材の実行時キャッシュ（デコード済み画像・音声、動画要素、口パク用の音量）。
+// 素材の実行時キャッシュ（デコード済み画像・音声、動画要素）。
 // 保存は assetStorage、ここは読み込んだものを使い回すだけ。
 import type { AssetMeta } from '../types';
 import { getAsset } from '../persist/assetStorage';
-import { computeEnvelope, levelAt } from './lipsync';
 
 type Listener = () => void;
 
@@ -13,7 +12,6 @@ class MediaCache {
   private blobs = new Map<string, Blob>();
   private images = new Map<string, ImageBitmap>();
   private audio = new Map<string, AudioBuffer | null>();
-  private envelopes = new Map<string, Float32Array>();
   private videos = new Map<string, HTMLVideoElement>();
   private urls = new Map<string, string>();
   private pending = new Map<string, Promise<void>>();
@@ -43,7 +41,6 @@ class MediaCache {
     this.blobs.clear();
     this.images.clear();
     this.audio.clear();
-    this.envelopes.clear();
     this.videos.clear();
     this.urls.clear();
     this.pending.clear();
@@ -100,21 +97,16 @@ class MediaCache {
     if (asset.kind === 'image') {
       this.images.set(asset.id, await createImageBitmap(blob));
     } else if (asset.kind === 'audio') {
-      const buffer = await decodeAudio(blob);
-      this.setAudio(asset.id, buffer);
+      this.setAudio(asset.id, await decodeAudioFile(blob));
     } else {
       if (!this.videos.has(asset.id)) this.videos.set(asset.id, await this.createVideo(asset.id, blob));
       // 動画の音声トラックも同じ仕組みで鳴らす（音声が無い動画はnull）
-      this.setAudio(asset.id, await decodeAudio(blob).catch(() => null));
+      this.setAudio(asset.id, await decodeTrackAudio(blob).catch(() => null));
     }
   }
 
   setAudio(assetId: string, buffer: AudioBuffer | null) {
     this.audio.set(assetId, buffer);
-    if (buffer) {
-      const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
-      this.envelopes.set(assetId, computeEnvelope(channels, buffer.sampleRate));
-    }
   }
 
   private createVideo(assetId: string, blob: Blob): Promise<HTMLVideoElement> {
@@ -126,9 +118,12 @@ class MediaCache {
     video.preload = 'auto';
     video.src = url;
     video.addEventListener('seeked', () => this.emit());
+    video.addEventListener('loadeddata', () => this.emit());
+    // iOSは操作が無いと映像データを読み込まないことがあるので、メタデータが読めた時点で使えることにする
     return new Promise((resolve, reject) => {
-      video.onloadeddata = () => resolve(video);
+      video.onloadedmetadata = () => resolve(video);
       video.onerror = () => reject(new Error('この動画形式は再生できません'));
+      video.load();
     });
   }
 
@@ -147,10 +142,6 @@ class MediaCache {
   allVideos(): IterableIterator<[string, HTMLVideoElement]> {
     return this.videos.entries();
   }
-
-  lipLevel(assetId: string | null, t: number): number {
-    return assetId ? levelAt(this.envelopes.get(assetId), t) : 0;
-  }
 }
 
 let decodeCtx: OfflineAudioContext | null = null;
@@ -161,3 +152,40 @@ export async function decodeAudio(blob: Blob): Promise<AudioBuffer> {
 }
 
 export const media = new MediaCache();
+
+/** 音楽・音声ファイルをデコードする。ブラウザが直接扱えない形式はMediabunnyで読む */
+export async function decodeAudioFile(blob: Blob): Promise<AudioBuffer> {
+  try {
+    return await decodeAudio(blob);
+  } catch {
+    const buffer = await decodeTrackAudio(blob).catch(() => null);
+    if (!buffer) throw new Error('この音声ファイルの形式には対応していません（MP3・WAV・M4A・AAC・OGGなどを使ってください）');
+    return buffer;
+  }
+}
+
+/**
+ * ファイルの音声トラックだけを少しずつデコードして1本のAudioBufferにする。
+ * ファイル全体をメモリに読み込まないので、スマホで撮った大きな動画でも扱える。
+ */
+export async function decodeTrackAudio(blob: Blob): Promise<AudioBuffer | null> {
+  const { Input, BlobSource, ALL_FORMATS, AudioBufferSink } = await import('mediabunny');
+  const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track || !(await track.canDecode())) return null;
+    const duration = await track.computeDuration();
+    const { sampleRate, numberOfChannels } = track;
+    const out = new AudioBuffer({ length: Math.max(1, Math.ceil(duration * sampleRate)), numberOfChannels, sampleRate });
+    for await (const { buffer, timestamp } of new AudioBufferSink(track).buffers()) {
+      const offset = Math.round(timestamp * sampleRate);
+      if (offset < 0 || offset >= out.length) continue;
+      for (let c = 0; c < Math.min(numberOfChannels, buffer.numberOfChannels); c++) {
+        out.copyToChannel(buffer.getChannelData(c).subarray(0, out.length - offset), c, offset);
+      }
+    }
+    return out;
+  } finally {
+    input.dispose();
+  }
+}

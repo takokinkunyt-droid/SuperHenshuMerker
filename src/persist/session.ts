@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type { Project } from '../types';
 import { editorState, useEditor } from '../state/store';
-import { createProject } from '../state/defaults';
+import { createProject, type AspectKey } from '../state/defaults';
 import { primeProjectMedia } from '../state/actions';
 import { playback } from '../media/playback';
 import { lastProjectId, loadStoredProject, requestPersistentStorage, saveProject } from './projects';
@@ -70,9 +70,9 @@ export async function boot(): Promise<void> {
   });
 }
 
-export async function newProject() {
+export async function newProject(aspect: AspectKey = '16:9') {
   await flush();
-  switchTo(createProject());
+  switchTo(createProject('新しいプロジェクト', aspect));
 }
 
 export async function openProject(id: string) {

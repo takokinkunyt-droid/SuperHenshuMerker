@@ -1,4 +1,4 @@
-// 音を鳴らすアイテム（セリフ・BGM・動画の音声）をAudioContextに並べる。
+// 音を鳴らすアイテム（音楽・効果音・動画の音声）をAudioContextに並べる。
 // プレビュー再生（AudioContext）と書き出し（OfflineAudioContext）で共通。
 import type { Project } from '../types';
 import { itemEnd } from '../state/timeline';
@@ -12,18 +12,8 @@ export function scheduleAudio(
 ): AudioBufferSourceNode[] {
   const nodes: AudioBufferSourceNode[] = [];
   for (const item of project.items) {
-    let assetId: string | null = null;
-    let offset = 0;
-    let volume = 1;
-    if (item.kind === 'voice') {
-      assetId = item.audioAssetId;
-      offset = item.audioOffset;
-      volume = item.volume;
-    } else if (item.kind === 'audio' || item.kind === 'video') {
-      assetId = item.assetId;
-      offset = item.sourceOffset;
-      volume = item.volume;
-    }
+    if (item.kind !== 'audio' && item.kind !== 'video') continue;
+    const { assetId, sourceOffset: offset, volume } = item;
     if (!assetId || volume <= 0 || itemEnd(item) <= fromTime) continue;
     const buffer = media.audioBuffer(assetId);
     if (!buffer) continue;

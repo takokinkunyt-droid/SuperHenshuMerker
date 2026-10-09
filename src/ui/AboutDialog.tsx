@@ -8,32 +8,35 @@ const SHORTCUTS: [string, string][] = [
   ['Delete / Backspace', '選択アイテムを削除'],
   ['Ctrl+D', '選択アイテムを複製'],
   ['Ctrl+Z / Ctrl+Shift+Z（Ctrl+Y）', '元に戻す／やり直す'],
-  ['Alt+1〜9', 'セリフ入力欄でキャラを切り替え'],
   ['Ctrl+ホイール', 'タイムラインの拡大・縮小'],
 ];
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Modal title="スーパー編集メーカーについて" onClose={onClose} wide>
+    <Modal title="スーパー編集メーカーの使い方" onClose={onClose} wide>
       <p>
-        ブラウザだけで「立ち絵＋字幕＋読み上げ音声」の解説動画を作れる編集ツールです。インストール不要で、編集・保存・書き出しはすべてブラウザの中で行われ、素材が外部に送信されることはありません。
+        ブラウザだけで動画を編集できるツールです。インストール不要で、スマホでも使えます。編集・保存・書き出しはすべてブラウザの中で行われ、素材が外部に送信されることはありません。
       </p>
-      <p className="notice">
-        本ツールは「ゆっくりMovieMaker4（YMM4）」とは無関係の独自ツールです。ゆっくりボイス（AquesTalk）は搭載していません。
-      </p>
-      <h4>使い方</h4>
+      <h4>基本の流れ</h4>
       <ol>
-        <li>「キャラクター」タブで、キャラごとにVOICEVOXの話者や立ち絵パーツ（PNG）を設定します。</li>
-        <li>下のセリフ入力欄でキャラを選んでセリフを入力するか、「台本」タブにまとめて貼り付けます。</li>
-        <li>音声・字幕・立ち絵が自動でタイムラインに並びます。背景やBGMは「素材」タブかドラッグ＆ドロップで追加します。</li>
-        <li>「書き出し」からMP4として保存します。</li>
+        <li>プロジェクト設定（何も選んでいないときの右側／スマホでは下）で、画面の比率を選びます（16:9・9:16・1:1）。</li>
+        <li>「🎞 動画・画像」で映像を、「🎵 音楽」でBGMや効果音を、「T テキスト」で文字を追加します。</li>
+        <li>タイムラインでアイテムを動かしたり、端をつかんで長さを変えたり、「✂ 分割」で切ったりします。</li>
+        <li>「書き出し」から動画（MP4）として保存します。</li>
       </ol>
-      <h4>音声について</h4>
+      <h4>再生位置（赤い線）の動かし方</h4>
       <ul>
-        <li>VOICEVOX：PCで起動したVOICEVOXエンジンに接続して音声を作ります（CORSの許可が必要）。使ったキャラのクレジット表記が必要です。</li>
-        <li>音声ファイル：他のツールで作ったWAV/MP3をセリフに割り当てられます。利用条件は作成元の規約に従ってください。</li>
+        <li>タイムラインの上の目盛りや、赤い線の上のつまみをドラッグする</li>
+        <li>何も無いところをクリック／タップするとその位置へ移動</li>
+        <li>何も無いところを長押ししたまま指を動かすと、赤い線がついてきます</li>
       </ul>
-      <h4>ショートカット</h4>
+      <h4>スマホでの操作</h4>
+      <ul>
+        <li>アイテムはタップで選択、長押ししてから指を動かすと移動できます（すぐ動かすと画面がスクロールします）。</li>
+        <li>選んだアイテムの両端の白いつまみで長さを変えられます。</li>
+        <li>書き出しが終わったら「共有・写真に保存」から写真アプリなどに保存できます。</li>
+      </ul>
+      <h4>ショートカット（パソコン）</h4>
       <table className="shortcut-table">
         <tbody>
           {SHORTCUTS.map(([k, v]) => (
@@ -46,10 +49,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           ))}
         </tbody>
       </table>
+      <p className="muted small">使った音楽・映像の利用条件（著作権・クレジット表記など）は、それぞれの提供元の規約に従ってください。</p>
       <h4>使用しているソフトウェア</h4>
-      <p className="muted small">
-        React、Zustand、Immer、fflate（MIT）、Mediabunny・@mediabunny/aac-encoder（MPL-2.0、FFmpegのAACエンコーダーを含む）
-      </p>
+      <p className="muted small">React、Zustand、Immer、fflate（MIT）、Mediabunny・@mediabunny/aac-encoder（MPL-2.0）</p>
     </Modal>
   );
 }

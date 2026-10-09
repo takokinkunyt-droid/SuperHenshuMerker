@@ -30,7 +30,8 @@ class Playback {
 
     this.ctx ??= new AudioContext();
     await this.ctx.resume();
-    await media.ensureAll(Object.values(s.project.assets));
+    // 読み込みに時間のかかる素材があっても再生は始める（読み込めたものから鳴る）
+    await Promise.race([media.ensureAll(Object.values(s.project.assets)), new Promise((r) => setTimeout(r, 3000))]);
 
     this.startTime = from;
     this.startCtxTime = this.ctx.currentTime + 0.05;
@@ -82,15 +83,6 @@ class Playback {
     if (wasPlaying) void this.play();
   }
 
-  /** 1つの音声だけを試聴する（セリフの確認用） */
-  async audition(buffer: AudioBuffer, offset = 0, duration?: number) {
-    this.ctx ??= new AudioContext();
-    await this.ctx.resume();
-    const node = this.ctx.createBufferSource();
-    node.buffer = buffer;
-    node.connect(this.ctx.destination);
-    node.start(0, offset, duration);
-  }
 }
 
 export const playback = new Playback();

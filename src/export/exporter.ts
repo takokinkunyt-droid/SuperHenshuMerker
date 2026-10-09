@@ -51,12 +51,19 @@ export async function checkExportSupport(width = 1920, height = 1080, fps = 30):
 }
 
 export interface ExportOptions {
-  /** 出力の高さ（幅は比率から決まる） */
-  height: number;
+  /** 出力の短い辺のピクセル数（1080なら 16:9 は1920x1080、9:16 は1080x1920） */
+  shortSide: number;
   /** 指定するとディスクへ逐次書き込む（長尺でもメモリを使い切らない） */
   fileHandle?: FileSystemFileHandle;
   signal?: AbortSignal;
   onProgress?: (ratio: number, label: string) => void;
+}
+
+/** 短い辺を指定したときの出力サイズ（H.264のため幅・高さは偶数にする） */
+export function outputSize(project: Pick<Project, 'width' | 'height'>, shortSide: number) {
+  const scale = shortSide / Math.min(project.width, project.height);
+  const even = (v: number) => Math.round((v * scale) / 2) * 2;
+  return { width: even(project.width), height: even(project.height) };
 }
 
 export interface ExportResult {
@@ -91,10 +98,7 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
   const duration = projectDuration(project);
   if (duration <= 0) throw new Error('タイムラインが空です');
 
-  const scale = opts.height / project.height;
-  // H.264は幅・高さが偶数である必要がある
-  const outW = Math.round((project.width * scale) / 2) * 2;
-  const outH = Math.round(opts.height / 2) * 2;
+  const { width: outW, height: outH } = outputSize(project, opts.shortSide);
   const fps = project.fps;
 
   const support = await checkExportSupport(outW, outH, fps);
@@ -147,9 +151,6 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
     },
     videoFrame(item) {
       return frameDrawables.get(item.id) ?? null;
-    },
-    lipLevel(assetId, t) {
-      return media.lipLevel(assetId, t);
     },
   };
 
@@ -254,15 +255,4 @@ class VideoFrameProvider {
     for (const it of this.iterators.values()) void it.return(undefined);
     for (const input of this.inputs) input.dispose();
   }
-}
-
-/** 使ったVOICEVOX話者とキャラから、動画の説明欄に貼るクレジットを作る */
-export function buildCredits(project: Project): string {
-  const usedChars = new Set(project.items.filter((it) => it.kind === 'voice').map((it) => (it as { characterId: string }).characterId));
-  const speakers = new Set<string>();
-  for (const ch of project.characters) {
-    if (usedChars.has(ch.id) && ch.voice.speakerId !== null && ch.voice.speakerName) speakers.add(ch.voice.speakerName);
-  }
-  const lines = [...speakers].map((name) => `VOICEVOX:${name}`);
-  return lines.join('\n');
 }
