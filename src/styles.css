@@ -166,6 +166,22 @@ hr {
   grid-template-columns: minmax(0, 1fr);
   position: relative;
 }
+/* 案内バーは出ない場合もあるので、各部分の段を固定する */
+.app > .header {
+  grid-row: 1;
+}
+.app > .banner {
+  grid-row: 2;
+}
+.app > .workspace {
+  grid-row: 3;
+}
+.app > .line-input {
+  grid-row: 4;
+}
+.app > .timeline {
+  grid-row: 5;
+}
 .header {
   display: flex;
   align-items: center;
