@@ -1,0 +1,10 @@
+{
+  "name": "スーパー編集メーカー",
+  "short_name": "編集メーカー",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1b1d24",
+  "theme_color": "#1b1d24",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
