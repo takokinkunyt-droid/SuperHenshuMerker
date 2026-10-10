@@ -52,7 +52,7 @@ export function drawFrame(ctx: Ctx, project: Project, t: number, src: FrameSourc
       box = placedBox(item, d.width, d.height);
       draw = (c) => drawPlaced(c, d, item);
     }
-    drawWithEffects(ctx, project, item.effects, t - item.start, item.duration, box, scale, draw);
+    drawWithEffects(ctx, project, item.effects, t - item.start, item.duration, box, scale, item.rotation ?? 0, draw);
   }
 }
 
@@ -65,6 +65,7 @@ function drawWithEffects(
   duration: number,
   box: Box,
   scale: number,
+  rotation: number,
   draw: (c: Ctx) => void,
 ) {
   const st = effectState(fx, local, duration, box, project);
@@ -78,11 +79,13 @@ function drawWithEffects(
   c.save();
   c.setTransform(scale, 0, 0, scale, 0, 0);
   c.translate(st.dx, st.dy);
-  if (st.zoom !== 1) {
+  // 拡大縮小入場と回転は、どちらも外枠の中心を基準にする
+  if (st.zoom !== 1 || rotation) {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
     c.translate(cx, cy);
-    c.scale(st.zoom, st.zoom);
+    if (rotation) c.rotate((rotation * Math.PI) / 180);
+    if (st.zoom !== 1) c.scale(st.zoom, st.zoom);
     c.translate(-cx, -cy);
   }
   if (!target) c.globalAlpha = st.alpha;

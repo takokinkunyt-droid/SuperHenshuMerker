@@ -19,6 +19,10 @@ interface EditorState {
   gestureBase: Project | null;
 
   selectedItemId: string | null;
+  /** プレビュー上で文字を編集中のテキストアイテム */
+  editingTextId: string | null;
+  /** スマホで下から出すパネル */
+  sheet: 'media' | 'edit' | null;
   currentTime: number;
   playing: boolean;
   pxPerSec: number;
@@ -36,6 +40,8 @@ interface EditorState {
   loadProject: (project: Project) => void;
 
   selectItem: (id: string | null) => void;
+  setEditingText: (id: string | null) => void;
+  setSheet: (sheet: 'media' | 'edit' | null) => void;
   setTime: (t: number) => void;
   setPlaying: (playing: boolean) => void;
   setPxPerSec: (v: number) => void;
@@ -57,6 +63,8 @@ export const useEditor = create<EditorState>()((set, get) => ({
   future: [],
   gestureBase: null,
   selectedItemId: null,
+  editingTextId: null,
+  sheet: null,
   currentTime: 0,
   playing: false,
   pxPerSec: 80,
@@ -121,11 +129,15 @@ export const useEditor = create<EditorState>()((set, get) => ({
       future: [],
       gestureBase: null,
       selectedItemId: null,
+      editingTextId: null,
+      sheet: null,
       currentTime: 0,
       playing: false,
     }),
 
-  selectItem: (id) => set({ selectedItemId: id }),
+  selectItem: (id) => set((s) => ({ selectedItemId: id, editingTextId: s.editingTextId === id ? id : null })),
+  setEditingText: (id) => set({ editingTextId: id, ...(id ? { selectedItemId: id } : {}) }),
+  setSheet: (sheet) => set({ sheet }),
   setTime: (t) => set({ currentTime: Math.max(0, t) }),
   setPlaying: (playing) => set({ playing }),
   setPxPerSec: (v) => set({ pxPerSec: Math.min(600, Math.max(5, v)) }),

@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
-import { drawFrame, itemBaseBox, itemPosition } from '../render/renderer';
-import { snapBox, snapLines, type Box } from '../render/effects';
+import { drawFrame } from '../render/renderer';
 import { previewSource, syncVideos } from '../render/previewSource';
 import { media } from '../media/mediaCache';
 import { playback } from '../media/playback';
-import { formatTime, isActiveAt, projectDuration } from '../state/timeline';
+import { formatTime, projectDuration } from '../state/timeline';
+import { PreviewInteraction } from './PreviewInteraction';
 
 const QUALITY_KEY = 'shm.previewScale';
-/** この距離（画面上のピクセル）まで近づいたら吸着する */
-const SNAP_SCREEN_PX = 10;
 
 function loadQuality(): number {
   try {
@@ -19,17 +17,9 @@ function loadQuality(): number {
   }
 }
 
-function applyPosition(id: string, x: number, y: number) {
-  editorState().editTransient((d) => {
-    const item = d.items.find((it) => it.id === id);
-    if (!item) return;
-    if (item.kind === 'image' || item.kind === 'video') Object.assign(item, { x, y });
-    else if (item.kind === 'text') Object.assign(item.style, { x, y });
-  });
-}
-
 export function Preview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const [quality, setQuality] = useState(loadQuality);
   const project = useEditor((s) => s.project);
   const playing = useEditor((s) => s.playing);
@@ -72,91 +62,16 @@ export function Preview() {
     };
   }, [quality]);
 
-  const drag = useRef<{ id: string; sx: number; sy: number; x: number; y: number; box: Box | null; lines: { xs: number[]; ys: number[] }; threshold: number } | null>(null);
-  const [guides, setGuides] = useState<{ xs: number[]; ys: number[] }>({ xs: [], ys: [] });
-  const toProject = (e: React.PointerEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * project.width,
-      y: ((e.clientY - rect.top) / rect.height) * project.height,
-    };
-  };
-
-  const selected = useEditor((s) => s.project.items.find((it) => it.id === s.selectedItemId));
-  const pos = selected ? itemPosition(selected) : null;
-  // 選んだアイテムが今の再生位置で見えていれば、外枠を点線で示す
-  const selectedBox = selected && isActiveAt(selected, currentTime) ? itemBaseBox(selected, project) : null;
-  const boxStyle = (b: Box) => ({
-    left: `${(b.x / project.width) * 100}%`,
-    top: `${(b.y / project.height) * 100}%`,
-    width: `${(b.w / project.width) * 100}%`,
-    height: `${(b.h / project.height) * 100}%`,
-  });
-
   return (
     <div className="preview-panel">
       <div className="preview-stage">
         <div
+          ref={frameRef}
           className="preview-frame"
           style={{ aspectRatio: `${project.width} / ${project.height}`, ['--aspect' as string]: project.width / project.height }}
         >
-          <canvas
-            ref={canvasRef}
-            className={pos ? 'draggable' : ''}
-            onPointerDown={(e) => {
-              if (!selected || !pos) return;
-              const p = toProject(e);
-              const s = editorState();
-              // 吸着先：画面の端・中央・余白と、いま見えているほかのアイテムの端・中央
-              const others = s.project.items
-                .filter((it) => it.id !== selected.id && it.kind !== 'audio' && isActiveAt(it, s.currentTime))
-                .map((it) => itemBaseBox(it, s.project))
-                .filter((b): b is Box => !!b);
-              const rect = canvasRef.current!.getBoundingClientRect();
-              drag.current = {
-                id: selected.id,
-                sx: p.x,
-                sy: p.y,
-                x: pos.x,
-                y: pos.y,
-                box: itemBaseBox(selected, s.project),
-                lines: snapLines(s.project, others),
-                threshold: (SNAP_SCREEN_PX * project.width) / rect.width,
-              };
-              s.beginGesture();
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            }}
-            onPointerMove={(e) => {
-              const d = drag.current;
-              if (!d) return;
-              const p = toProject(e);
-              let dx = p.x - d.sx;
-              let dy = p.y - d.sy;
-              // Altキーを押している間は吸着しない
-              if (d.box && !e.altKey) {
-                const snap = snapBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy }, d.lines, d.threshold);
-                dx += snap.dx;
-                dy += snap.dy;
-                setGuides({ xs: snap.guidesX, ys: snap.guidesY });
-              } else {
-                setGuides({ xs: [], ys: [] });
-              }
-              applyPosition(d.id, Math.round(d.x + dx), Math.round(d.y + dy));
-            }}
-            onPointerUp={() => {
-              if (!drag.current) return;
-              drag.current = null;
-              setGuides({ xs: [], ys: [] });
-              editorState().endGesture();
-            }}
-          />
-          {selectedBox && <div className="selection-box" style={boxStyle(selectedBox)} />}
-          {guides.xs.map((x) => (
-            <div key={`x${x}`} className="guide vertical" style={{ left: `${(x / project.width) * 100}%` }} />
-          ))}
-          {guides.ys.map((y) => (
-            <div key={`y${y}`} className="guide horizontal" style={{ top: `${(y / project.height) * 100}%` }} />
-          ))}
+          <canvas ref={canvasRef} />
+          <PreviewInteraction frameRef={frameRef} />
           {project.items.length === 0 && (
             <div className="preview-empty">
               下の「🎞 動画・画像」「🎵 音楽」「T テキスト」から追加してください

@@ -111,7 +111,8 @@ export function addTextItem(): void {
   s.edit((d) => {
     d.items.push(item);
   });
-  s.selectItem(item.id);
+  // 追加したらすぐプレビュー上で文字を入力できるようにする
+  s.setEditingText(item.id);
 }
 
 export function updateItem(id: string, patch: Partial<TimelineItem>): void {

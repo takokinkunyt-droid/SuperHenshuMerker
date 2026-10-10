@@ -3,6 +3,7 @@ import type { AudioEffects, Placement, SlideDirection, TextStyle, TimelineItem, 
 import { ASPECTS, FONT_FAMILIES, MIN_ITEM_DURATION, aspectOf, type AspectKey } from '../state/defaults';
 import { alignItem, deleteItem, setAspect, updateItem } from '../state/actions';
 import { ColorInput, CommitText, Field, NumberInput, SliderNumber } from './common';
+import { SheetHeader } from './MobileNav';
 
 const KIND_TITLE: Record<TimelineItem['kind'], string> = {
   text: 'テキスト',
@@ -13,8 +14,10 @@ const KIND_TITLE: Record<TimelineItem['kind'], string> = {
 
 export function Inspector() {
   const item = useEditor((s) => s.project.items.find((it) => it.id === s.selectedItemId));
+  const open = useEditor((s) => s.sheet === 'edit');
   return (
-    <aside className="panel inspector">
+    <aside className={`panel inspector ${open ? 'sheet-open' : ''}`}>
+      <SheetHeader title={item ? '編集' : 'プロジェクト設定'} />
       {item ? <ItemInspector item={item} /> : <ProjectInspector />}
     </aside>
   );
@@ -80,6 +83,9 @@ function ItemInspector({ item }: { item: TimelineItem }) {
         <div className="form">
           <Field label="テキスト">
             <CommitText multiline value={item.text} onCommit={(text) => update({ text })} />
+          </Field>
+          <Field label="回転(度)">
+            <SliderNumber value={item.rotation ?? 0} min={-180} max={180} step={1} digits={0} onChange={(rotation) => update({ rotation })} />
           </Field>
           <TextStyleEditor style={item.style} onChange={(style) => update({ style: { ...item.style, ...style } })} />
         </div>
@@ -297,6 +303,9 @@ function PlacementEditor({ value, onChange }: { value: Placement; onChange: (p: 
       </Field>
       <Field label="不透明度">
         <SliderNumber value={value.opacity} min={0} max={1} step={0.01} onChange={(opacity) => onChange({ opacity })} />
+      </Field>
+      <Field label="回転(度)">
+        <SliderNumber value={value.rotation ?? 0} min={-180} max={180} step={1} digits={0} onChange={(rotation) => onChange({ rotation })} />
       </Field>
     </div>
   );

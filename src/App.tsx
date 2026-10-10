@@ -4,6 +4,7 @@ import { useSaveStatus } from './persist/session';
 import { deleteItem, duplicateItem, importAndPlace, splitAtPlayhead } from './state/actions';
 import { playback } from './media/playback';
 import { MediaPanel } from './ui/MediaPanel';
+import { MobileNav } from './ui/MobileNav';
 import { Preview } from './ui/Preview';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
@@ -142,6 +143,7 @@ export function App() {
         <Inspector />
       </main>
       <Timeline />
+      <MobileNav />
 
       {dialog === 'export' && (
         <Suspense fallback={null}>

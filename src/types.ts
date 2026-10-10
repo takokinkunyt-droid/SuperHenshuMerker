@@ -71,12 +71,16 @@ export interface Placement {
   y: number;
   scale: number;
   opacity: number;
+  /** 回転（度、時計回り） */
+  rotation?: number;
 }
 
 export interface TextItem extends ItemBase {
   kind: 'text';
   text: string;
   style: TextStyle;
+  /** 回転（度、時計回り） */
+  rotation?: number;
   effects?: VisualEffects;
 }
 

@@ -417,6 +417,8 @@ details .field + .field {
 .preview-stage {
   flex: 1;
   min-height: 0;
+  /* 画面より大きくしたオブジェクトのつまみが、ヘッダーなどに重ならないようにする */
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -430,13 +432,6 @@ details .field + .field {
 }
 .preview-frame {
   position: relative;
-  overflow: hidden;
-}
-.selection-box {
-  position: absolute;
-  outline: 1px dashed rgba(255, 255, 255, 0.8);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
 }
 .guide {
   position: absolute;
@@ -453,6 +448,146 @@ details .field + .field {
   left: 0;
   right: 0;
   height: 1px;
+}
+.preview-interact {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  z-index: 1;
+}
+/* 選んだオブジェクトの枠と、拡大縮小・回転のつまみ */
+.tf-box {
+  --h: 12px;
+  position: absolute;
+  outline: 1.5px solid #4d86ff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 3;
+}
+.tf-handle {
+  position: absolute;
+  width: var(--h);
+  height: var(--h);
+  margin: calc(var(--h) / -2);
+  background: #fff;
+  border: 2px solid #4d86ff;
+  border-radius: 3px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.tf-handle.nw {
+  left: 0;
+  top: 0;
+  cursor: nwse-resize;
+}
+.tf-handle.ne {
+  right: 0;
+  top: 0;
+  margin-right: calc(var(--h) / -2);
+  margin-left: 0;
+  cursor: nesw-resize;
+}
+.tf-handle.sw {
+  left: 0;
+  bottom: 0;
+  margin-bottom: calc(var(--h) / -2);
+  margin-top: 0;
+  cursor: nesw-resize;
+}
+.tf-handle.se {
+  right: 0;
+  bottom: 0;
+  margin: 0 calc(var(--h) / -2) calc(var(--h) / -2) 0;
+  cursor: nwse-resize;
+}
+.tf-rotate-line {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 1.5px;
+  height: 22px;
+  background: #4d86ff;
+}
+.tf-rotate {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 18px);
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  border-radius: 50%;
+  background: #fff;
+  color: #2b6cf6;
+  border: 2px solid #4d86ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+.tf-box.rot-below .tf-rotate-line {
+  bottom: auto;
+  top: 100%;
+}
+.tf-box.rot-below .tf-rotate {
+  bottom: auto;
+  top: calc(100% + 18px);
+}
+.tf-box.rot-below .tf-edit {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+.tf-edit {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  white-space: nowrap;
+  background: #2b6cf6;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tf-editor {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.tf-editor textarea {
+  width: 100%;
+  min-height: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid #4d86ff;
+  border-radius: 4px;
+  text-align: center;
+  line-height: 1.25;
+  padding: 2px 4px;
+  resize: none;
+  overflow: hidden;
+}
+@media (pointer: coarse) {
+  .tf-box {
+    --h: 22px;
+  }
+  .tf-rotate {
+    width: 34px;
+    height: 34px;
+    margin-left: -17px;
+    font-size: 18px;
+  }
+  .tf-rotate-line {
+    height: 26px;
+  }
 }
 .preview-empty {
   position: absolute;
@@ -472,10 +607,7 @@ details .field + .field {
   height: 100%;
   display: block;
 }
-.preview-frame canvas.draggable {
-  cursor: move;
-  touch-action: none;
-}
+
 .transport {
   display: flex;
   align-items: center;
@@ -866,30 +998,25 @@ details .field + .field {
   }
 }
 
+/* スマホ用の部品はパソコンでは出さない */
+.mobile-nav,
+.sheet-head {
+  display: none;
+}
+
 /* ---------- phones ---------- */
+/* アプリのように画面を固定し、上から「ヘッダー → プレビュー → タイムライン → 下のタブ」と並べる。
+   素材と編集は下から出るパネルで、タイムラインの上に重なる（プレビューは見えたまま） */
 @media (max-width: 760px) {
-  html,
-  body,
-  #root {
-    overflow: auto;
-    height: auto;
-    min-height: 100%;
-  }
   .app {
-    height: auto;
-    min-height: 100dvh;
-    grid-template-rows: none;
-    grid-auto-rows: auto;
+    height: 100dvh;
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(190px, 34dvh) auto;
   }
-  /* 縦に「プレビュー → タイムライン → 設定 → 素材」と並べる */
   .workspace {
     display: contents;
   }
   .app > .header {
     grid-row: 1;
-    position: sticky;
-    top: 0;
-    z-index: 10;
   }
   .app > .banner {
     grid-row: 2;
@@ -897,34 +1024,116 @@ details .field + .field {
   .workspace > .preview-panel {
     grid-row: 3;
     grid-column: 1;
-    position: sticky;
-    top: 49px;
-    z-index: 5;
+    min-height: 0;
   }
   .app > .timeline {
     grid-row: 4;
-    height: 46vh;
-    min-height: 260px;
+    min-height: 0;
   }
-  .panel.inspector {
+  .app > .mobile-nav {
     grid-row: 5;
-    grid-column: 1;
-    border: none;
-    border-top: 1px solid var(--line);
-    overflow: visible;
-  }
-  .panel.side {
-    grid-row: 6;
-    grid-column: 1;
-    border: none;
-    border-top: 1px solid var(--line);
-    overflow: visible;
   }
   .preview-stage {
-    flex: none;
-    height: 34vh;
-    padding: 6px;
+    padding: 8px 10px 22px;
   }
+  .transport {
+    padding: 2px 6px;
+  }
+  .play-btn {
+    width: 44px;
+    height: 34px;
+  }
+
+  /* 下のタブ */
+  .mobile-nav {
+    display: flex;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+    position: relative;
+    z-index: 31;
+  }
+  .mobile-nav button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 0 7px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .mobile-nav .nav-icon {
+    font-size: 19px;
+    line-height: 1.2;
+  }
+  .mobile-nav button.active {
+    color: var(--text);
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  .mobile-nav button.has-selection:not(.active) {
+    color: #9fc0ff;
+  }
+
+  /* 下から出るパネル（素材・編集） */
+  .panel.side,
+  .panel.inspector {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    /* タイムラインと同じ高さにして、プレビューと再生ボタンは見えたままにする */
+    height: max(190px, 34dvh);
+    z-index: 30;
+    border: none;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    padding: 0 12px 16px;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+    transform: translateY(calc(100% + 60px));
+    transition: transform 0.22s ease;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .panel.side.sheet-open,
+  .panel.inspector.sheet-open {
+    transform: none;
+  }
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0 -12px 8px;
+    padding: 10px 8px 6px 16px;
+    background: var(--panel);
+  }
+  .sheet-head strong {
+    flex: 1;
+    font-size: 15px;
+  }
+  .sheet-grip {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .desktop-only {
+    display: none;
+  }
+  .inspector .panel-title {
+    margin-top: 0;
+  }
+
   .header {
     gap: 4px;
     padding: 6px;
@@ -957,7 +1166,7 @@ details .field + .field {
   .timeline-toolbar {
     overflow-x: auto;
     flex-wrap: nowrap;
-    padding: 6px;
+    padding: 4px 6px;
   }
   .timeline-toolbar .spacer {
     flex: 0 0 4px;
@@ -973,7 +1182,8 @@ details .field + .field {
     border-radius: 14px 14px 0 0;
   }
   .field,
-  .modal .field {
+  .modal .field,
+  .align-grid {
     grid-template-columns: 96px minmax(0, 1fr);
   }
   input[type='text'],

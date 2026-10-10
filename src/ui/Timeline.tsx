@@ -223,7 +223,12 @@ export function Timeline() {
           applyDrag(item, mode, ev.clientX - x0, ev.clientY - y0, snaps, ev.altKey);
         },
         end: () => editorState().endGesture(),
-        tap: () => editorState().selectItem(item.id),
+        tap: () => {
+          const s = editorState();
+          // スマホで選択済みのアイテムをもう一度タップしたら、編集パネルを開く
+          if (s.selectedItemId === item.id) s.setSheet('edit');
+          else s.selectItem(item.id);
+        },
       },
       immediate,
     );

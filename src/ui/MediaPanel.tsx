@@ -2,6 +2,7 @@ import { useEditor } from '../state/store';
 import type { AssetMeta } from '../types';
 import { importAndPlace, importAsset, placeAsset, removeAsset } from '../state/actions';
 import { FileButton } from './common';
+import { SheetHeader } from './MobileNav';
 
 export const VISUAL_ACCEPT = 'video/*,image/*,.mp4,.mov,.webm,.m4v,.png,.jpg,.jpeg,.webp,.gif';
 export const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac';
@@ -31,9 +32,11 @@ function formatSize(bytes: number) {
 export function MediaPanel() {
   const assets = useEditor((s) => s.project.assets);
   const list = Object.values(assets).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  const open = useEditor((s) => s.sheet === 'media');
   return (
-    <aside className="panel side">
-      <h3 className="panel-title">素材</h3>
+    <aside className={`panel side ${open ? 'sheet-open' : ''}`}>
+      <SheetHeader title="素材" />
+      <h3 className="panel-title desktop-only">素材</h3>
       <div className="button-row stack">
         <AddButtons />
         <FileButton
