@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { produce, type Draft } from 'immer';
-import type { Project } from '../types';
+import type { Project, TimelineItem } from '../types';
 import { createProject } from './defaults';
 
 const HISTORY_LIMIT = 200;
@@ -23,6 +23,8 @@ interface EditorState {
   editingTextId: string | null;
   /** スマホで下から出すパネル */
   sheet: 'media' | 'edit' | null;
+  /** コピーしたアイテム（同じプロジェクトの中で貼り付けに使う） */
+  clipboard: { projectId: string; item: TimelineItem } | null;
   currentTime: number;
   playing: boolean;
   pxPerSec: number;
@@ -44,6 +46,7 @@ interface EditorState {
   selectItem: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
   setSheet: (sheet: 'media' | 'edit' | null) => void;
+  setClipboard: (clip: { projectId: string; item: TimelineItem } | null) => void;
   setTime: (t: number) => void;
   setPlaying: (playing: boolean) => void;
   setPxPerSec: (v: number) => void;
@@ -67,6 +70,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   selectedItemId: null,
   editingTextId: null,
   sheet: null,
+  clipboard: null,
   currentTime: 0,
   playing: false,
   pxPerSec: 80,
@@ -145,6 +149,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   selectItem: (id) => set((s) => ({ selectedItemId: id, editingTextId: s.editingTextId === id ? id : null })),
   setEditingText: (id) => set({ editingTextId: id, ...(id ? { selectedItemId: id } : {}) }),
   setSheet: (sheet) => set({ sheet }),
+  setClipboard: (clipboard) => set({ clipboard }),
   setTime: (t) => set({ currentTime: Math.max(0, t) }),
   setPlaying: (playing) => set({ playing }),
   setPxPerSec: (v) => set({ pxPerSec: Math.min(600, Math.max(5, v)) }),

@@ -91,6 +91,20 @@ hr {
   margin: 6px 0;
 }
 
+/* 長押しでボタンの文字などが選択されて青くならないように、入力欄以外は文字を選べなくする */
+.app {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.app input,
+.app textarea,
+.app [contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* ---------- buttons ---------- */
 button {
   touch-action: manipulation;
@@ -240,6 +254,31 @@ details.effects {
   font-weight: 700;
   font-size: 15px;
   margin-right: 8px;
+}
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.act-btn:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.act-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
 }
 .save-status {
   font-size: 12px;
@@ -1194,10 +1233,29 @@ details .field + .field {
   }
 
   .header {
-    gap: 4px;
-    padding: 6px;
+    gap: 2px;
+    padding: 4px;
   }
-  .brand span,
+  .edit-actions {
+    flex: 1;
+    justify-content: space-around;
+    gap: 0;
+  }
+  .act-btn {
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 3px;
+    min-width: 40px;
+    font-size: 10px;
+  }
+  .header .spacer {
+    display: none;
+  }
+  .project-btn {
+    padding: 4px 6px;
+  }
+  .brand,
+  .project-name,
   .help-label,
   .quality-label,
   .save-status,
@@ -1212,13 +1270,7 @@ details .field + .field {
     flex: 0 1 auto;
     overflow: hidden;
   }
-  .project-name {
-    display: inline-block;
-    max-width: 30vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: bottom;
-  }
+
   .quality {
     font-size: 11px;
   }

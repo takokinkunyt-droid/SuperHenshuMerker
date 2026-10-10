@@ -163,6 +163,35 @@ export function duplicateItem(id: string): void {
   s.selectItem(copy.id);
 }
 
+/** 選んだアイテムをコピーする */
+export function copyItem(id: string): void {
+  const s = editorState();
+  const item = s.project.items.find((it) => it.id === id);
+  if (!item) return;
+  s.setClipboard({ projectId: s.project.id, item: structuredClone(item) });
+  s.toast('コピーしました（「ペースト」で再生位置に貼り付け）');
+}
+
+/** コピーしたアイテムを再生位置に貼り付ける。同じレイヤーが空いていなければ空いているレイヤーに置く */
+export function pasteItem(): void {
+  const s = editorState();
+  const clip = s.clipboard;
+  if (!clip) return;
+  const src = clip.item;
+  // 素材を使うアイテムは、その素材があるプロジェクトの中でだけ貼り付けられる
+  if ('assetId' in src && !s.project.assets[src.assetId]) {
+    s.toast('この素材は今のプロジェクトに無いため貼り付けられません', 'error');
+    return;
+  }
+  const start = s.currentTime;
+  const copy = { ...structuredClone(src), id: uid(), start } as TimelineItem;
+  copy.layer = findFreeLayer(s.project.items, start, start + src.duration, src.layer);
+  s.edit((d) => {
+    d.items.push(copy);
+  });
+  s.selectItem(copy.id);
+}
+
 // ---------- プロジェクト ----------
 
 /** 画面の比率（16:9・9:16・1:1）を切り替える */

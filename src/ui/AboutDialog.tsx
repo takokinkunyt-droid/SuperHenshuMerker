@@ -7,6 +7,7 @@ const SHORTCUTS: [string, string][] = [
   ['S', '再生位置で分割'],
   ['Delete / Backspace', '選択アイテムを削除'],
   ['Ctrl+D', '選択アイテムを複製'],
+  ['Ctrl+C / Ctrl+V', 'コピー／再生位置に貼り付け'],
   ['Ctrl+Z / Ctrl+Shift+Z（Ctrl+Y）', '元に戻す／やり直す'],
   ['Ctrl+ホイール', 'タイムラインの拡大・縮小'],
 ];

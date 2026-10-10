@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { editorState, useEditor } from './state/store';
 import { useSaveStatus } from './persist/session';
-import { deleteItem, duplicateItem, importAndPlace, splitAtPlayhead } from './state/actions';
+import { copyItem, deleteItem, duplicateItem, importAndPlace, pasteItem, splitAtPlayhead } from './state/actions';
 import { playback } from './media/playback';
 import { MediaPanel } from './ui/MediaPanel';
 import { MobileNav } from './ui/MobileNav';
+import { EditActions } from './ui/EditActions';
 import { Preview } from './ui/Preview';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
@@ -41,6 +42,16 @@ function useShortcuts(enabled: boolean) {
       } else if (mod && key === 'd') {
         e.preventDefault();
         if (s.selectedItemId) duplicateItem(s.selectedItemId);
+      } else if (mod && key === 'c') {
+        if (s.selectedItemId) {
+          e.preventDefault();
+          copyItem(s.selectedItemId);
+        }
+      } else if (mod && key === 'v') {
+        if (s.clipboard) {
+          e.preventDefault();
+          pasteItem();
+        }
       } else if (mod) {
         return;
       } else if (e.key === ' ') {
@@ -68,8 +79,6 @@ function useShortcuts(enabled: boolean) {
 
 export function App() {
   const projectName = useEditor((s) => s.project.name);
-  const canUndo = useEditor((s) => s.past.length > 0);
-  const canRedo = useEditor((s) => s.future.length > 0);
   const toasts = useEditor((s) => s.toasts);
   const saveStatus = useSaveStatus((s) => s.status);
   const [dialog, setDialog] = useState<'export' | 'project' | 'about' | null>(null);
@@ -116,12 +125,7 @@ export function App() {
         </button>
         <span className={`save-status ${saveStatus}`}>{SAVE_LABEL[saveStatus]}</span>
         <span className="spacer" />
-        <button className="icon-btn" disabled={!canUndo} onClick={() => editorState().undo()} title="元に戻す (Ctrl+Z)">
-          ↶
-        </button>
-        <button className="icon-btn" disabled={!canRedo} onClick={() => editorState().redo()} title="やり直す (Ctrl+Shift+Z)">
-          ↷
-        </button>
+        <EditActions />
         <button className="btn ghost" onClick={() => setDialog('about')} aria-label="使い方">
           ？<span className="help-label"> 使い方</span>
         </button>
