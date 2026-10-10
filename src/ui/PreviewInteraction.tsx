@@ -3,11 +3,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
 import type { Project, TextItem, TimelineItem } from '../types';
-import { itemBaseBox, visibleItems } from '../render/renderer';
+import { itemBaseBox, measureTextLines, visibleItems } from '../render/renderer';
 import { snapBox, snapLines, type Box } from '../render/effects';
 import { angleOf, center, hitBox, itemRotation, scaleTextStyle, snapAngle, type Point } from '../render/transform';
 import { isActiveAt } from '../state/timeline';
-import { updateItem } from '../state/actions';
 
 /** この距離（画面上のピクセル）まで近づいたら吸着する */
 const SNAP_SCREEN_PX = 10;
@@ -77,15 +76,17 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   const pointers = useRef(new Map<number, Point>());
   const lastTap = useRef<{ id: string; at: number } | null>(null);
 
-  // 画面上の大きさ（テキスト編集欄の文字サイズや、つまみの当たり判定に使う）
+  // 画面上の大きさ（テキスト編集欄の文字サイズや、吸着・当たり判定の距離に使う）。
+  // 操作レイヤーはプレビューの枠いっぱいに広がっているので、自分の幅を測る
+  // （親の枠は、子のこの処理が動く時点ではまだ参照できないことがある）
   useLayoutEffect(() => {
-    const el = frameRef.current;
+    const el = interactRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => setFrameWidth(el.clientWidth));
     ro.observe(el);
     setFrameWidth(el.clientWidth);
     return () => ro.disconnect();
-  }, [frameRef]);
+  }, []);
 
   const pxToProject = frameWidth ? project.width / frameWidth : 1;
   const toProject = (e: { clientX: number; clientY: number }): Point => {
@@ -242,7 +243,7 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   });
 
   const editing = editingId ? project.items.find((it): it is TextItem => it.id === editingId && it.kind === 'text') : undefined;
-  const editingBox = editing && isActiveAt(editing, currentTime) ? itemBaseBox(editing, project) : null;
+  const editingVisible = !!editing && isActiveAt(editing, currentTime);
 
   return (
     <>
@@ -279,10 +280,10 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
       {guides.ys.map((y) => (
         <div key={`y${y}`} className="guide horizontal" style={{ top: `${(y / project.height) * 100}%` }} />
       ))}
-      {editing && editingBox && (
+      {editing && editingVisible && (
         <TextEditor
+          key={editing.id}
           item={editing}
-          box={editingBox}
           pct={pct}
           scale={frameWidth / project.width}
           commitRef={commitEditor}
@@ -294,17 +295,18 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   );
 }
 
-/** プレビュー上でその場で文字を書き換える欄 */
+/**
+ * プレビュー上でその場で文字を書き換える。入力欄そのものは透明で、打った文字はすぐに本物のテキスト
+ * （フォント・縁取り・色・エフェクト込み）として描かれる。見えるのはカーソルと点線の枠だけ。
+ */
 function TextEditor({
   item,
-  box,
   pct,
   scale,
   commitRef,
   onDragOut,
 }: {
   item: TextItem;
-  box: Box;
   pct: (b: Box) => React.CSSProperties;
   scale: number;
   commitRef: React.MutableRefObject<(() => void) | null>;
@@ -313,18 +315,40 @@ function TextEditor({
   const [text, setText] = useState(item.text);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
+    // 編集の始めから終わりまでを、元に戻す1回分にまとめる
+    editorState().beginGesture();
     ref.current?.focus();
     ref.current?.select();
   }, []);
+
+  const setLive = (value: string) => {
+    setText(value);
+    editorState().editTransient((d) => {
+      const it = d.items.find((x) => x.id === item.id);
+      if (it?.kind === 'text') it.text = value;
+    });
+  };
+
   const closed = useRef(false);
-  const textRef = useRef(text);
-  textRef.current = text;
   const close = (commit: boolean) => {
     if (closed.current) return;
     closed.current = true;
-    const value = textRef.current;
-    if (commit && value !== item.text) updateItem(item.id, { text: value || ' ' });
-    editorState().setEditingText(null);
+    const s = editorState();
+    const value = ref.current?.value ?? text;
+    if (!commit) {
+      // やめる：編集を始める前の状態に戻す
+      s.cancelGesture();
+    } else {
+      if (!value.trim()) {
+        // 文字を全部消したら、テキストごと消す
+        s.editTransient((d) => {
+          d.items = d.items.filter((x) => x.id !== item.id);
+        });
+        s.selectItem(null);
+      }
+      s.endGesture();
+    }
+    s.setEditingText(null);
   };
   useEffect(() => {
     commitRef.current = () => close(true);
@@ -332,25 +356,43 @@ function TextEditor({
       commitRef.current = null;
     };
   });
+
   const dragStart = useRef<{ id: number; x: number; y: number } | null>(null);
-  // 欄は文字の外枠より少し広めにとり、短い文字でも入力しやすくする
-  const minW = Math.max(box.w, item.style.fontSize * 6);
-  const editBox = { x: box.x + box.w / 2 - minW / 2, y: box.y, w: minW, h: box.h };
-  const s = item.style;
+
+  // 描かれる文字と同じ位置・大きさ・折り返しにそろえる（キャンバスの描き方に合わせた計算）
+  const st = item.style;
+  const lines = Math.max(1, measureTextLines(text || ' ', st).length);
+  const lineHeight = st.fontSize * 1.25;
+  const editBox: Box = {
+    x: st.x - st.maxWidth / 2,
+    y: st.y - st.fontSize * 1.2 - (lines - 1) * lineHeight,
+    w: st.maxWidth,
+    h: lines * lineHeight,
+  };
+  // iPhoneは16px未満の入力欄にフォーカスすると画面を拡大してしまうので、
+  // 小さい文字のときは16pxで入力欄を作って縮小表示する
+  const shown = st.fontSize * scale;
+  const k = shown > 0 && shown < 16 ? shown / 16 : 1;
+  const px = (v: number) => `${(v * scale) / k}px`;
   return (
-    <div className="tf-editor" style={pct(editBox)}>
+    <div className="tf-editor" style={{ ...pct(editBox), transform: `rotate(${item.rotation ?? 0}deg)` }}>
       <textarea
         ref={ref}
         value={text}
         aria-label="テキストを編集"
+        spellCheck={false}
         style={{
-          fontSize: `${Math.max(16, s.fontSize * scale)}px`, // 16px未満だとiPhoneで画面が拡大されてしまう
-          fontFamily: s.fontFamily,
-          fontWeight: s.bold ? 700 : 400,
-          color: s.color,
-          WebkitTextStroke: s.strokeWidth > 0 ? `${Math.max(0.5, s.strokeWidth * scale * 0.5)}px ${s.strokeColor}` : undefined,
+          fontSize: px(st.fontSize),
+          lineHeight: px(lineHeight),
+          fontFamily: st.fontFamily,
+          fontWeight: st.bold ? 700 : 400,
+          caretColor: st.color,
+          width: `${100 / k}%`,
+          height: `${100 / k}%`,
+          transform: k !== 1 ? `scale(${k})` : undefined,
+          transformOrigin: '0 0',
         }}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => setLive(e.target.value)}
         onBlur={() => close(true)}
         onPointerDown={(e) => {
           dragStart.current = { id: e.pointerId, x: e.clientX, y: e.clientY };

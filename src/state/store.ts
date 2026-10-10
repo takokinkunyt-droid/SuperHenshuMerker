@@ -35,6 +35,8 @@ interface EditorState {
   editTransient: (recipe: (draft: Draft<Project>) => void) => void;
   beginGesture: () => void;
   endGesture: () => void;
+  /** まとめ操作を取り消して、始める前の状態に戻す（履歴は増やさない） */
+  cancelGesture: () => void;
   undo: () => void;
   redo: () => void;
   loadProject: (project: Project) => void;
@@ -106,6 +108,11 @@ export const useEditor = create<EditorState>()((set, get) => ({
       past: [...past, gestureBase].slice(-HISTORY_LIMIT),
       future: [],
     });
+  },
+
+  cancelGesture: () => {
+    const { gestureBase } = get();
+    if (gestureBase) set({ project: gestureBase, gestureBase: null });
   },
 
   undo: () => {

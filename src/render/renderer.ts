@@ -240,3 +240,8 @@ export function itemPosition(item: TimelineItem): { x: number; y: number } | nul
   if (item.kind === 'text') return { x: item.style.x, y: item.style.y };
   return null;
 }
+
+/** テキストを折り返した行（プレビュー上の文字入力欄を、描かれる文字にぴったり重ねるのに使う） */
+export function measureTextLines(text: string, style: TextStyle): string[] {
+  return layoutText(scratch('measure', 1, 1).ctx, text, style).lines;
+}

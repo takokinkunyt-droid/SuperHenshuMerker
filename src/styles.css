@@ -593,24 +593,38 @@ details .field + .field {
 .tf-editor {
   position: absolute;
   z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  outline: 1.5px dashed #4d86ff;
+  outline-offset: 2px;
 }
+/* 入力欄は透明。打った文字はキャンバス側に本物のテキストとして描かれ、ここにはカーソルだけが見える */
 .tf-editor textarea {
   /* 指でドラッグしたらテキストの移動に切り替えるため、ブラウザのスクロールは止める */
   touch-action: none;
+  display: block;
   width: 100%;
-  min-height: 100%;
-  background: rgba(0, 0, 0, 0.55);
-  border: 2px solid #4d86ff;
-  border-radius: 4px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
   text-align: center;
-  line-height: 1.25;
-  padding: 2px 4px;
-  resize: none;
+  white-space: pre-wrap;
+  word-break: break-all;
   overflow: hidden;
+  resize: none;
+}
+.tf-editor textarea::selection {
+  background: rgba(77, 134, 255, 0.35);
+}
+.tf-done {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 @media (pointer: coarse) {
   .tf-box {
