@@ -71,6 +71,9 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   const [guides, setGuides] = useState<{ xs: number[]; ys: number[] }>({ xs: [], ys: [] });
   const [frameWidth, setFrameWidth] = useState(0);
   const gesture = useRef<Gesture | null>(null);
+  const interactRef = useRef<HTMLDivElement>(null);
+  /** 開いているテキスト編集欄の内容を確定して閉じる */
+  const commitEditor = useRef<(() => void) | null>(null);
   const pointers = useRef(new Map<number, Point>());
   const lastTap = useRef<{ id: string; at: number } | null>(null);
 
@@ -119,10 +122,18 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || editingId) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
+    // 文字の編集中に編集欄の外を触ったら、入力を確定して閉じ、そのまま普通の操作として続ける
+    // （iPhoneは編集欄の外をタップしても入力欄が閉じないため、ここで閉じる）
+    if (editorState().editingTextId) commitEditor.current?.();
+    beginAt(e.pointerId, e);
+  };
+
+  /** 指（マウス）が置かれた位置で、選択・移動・ピンチを始める */
+  const beginAt = (pointerId: number, e: { clientX: number; clientY: number }) => {
+    interactRef.current?.setPointerCapture(pointerId);
     const p = toProject(e);
-    pointers.current.set(e.pointerId, p);
+    pointers.current.set(pointerId, p);
     if (pointers.current.size === 2) {
       startPinch();
       return;
@@ -236,6 +247,7 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   return (
     <>
       <div
+        ref={interactRef}
         className="preview-interact"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -267,13 +279,37 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
       {guides.ys.map((y) => (
         <div key={`y${y}`} className="guide horizontal" style={{ top: `${(y / project.height) * 100}%` }} />
       ))}
-      {editing && editingBox && <TextEditor item={editing} box={editingBox} pct={pct} scale={frameWidth / project.width} />}
+      {editing && editingBox && (
+        <TextEditor
+          item={editing}
+          box={editingBox}
+          pct={pct}
+          scale={frameWidth / project.width}
+          commitRef={commitEditor}
+          // 編集欄を指でドラッグしたら、確定してそのままテキストを動かす
+          onDragOut={(pointerId, e) => beginAt(pointerId, e)}
+        />
+      )}
     </>
   );
 }
 
 /** プレビュー上でその場で文字を書き換える欄 */
-function TextEditor({ item, box, pct, scale }: { item: TextItem; box: Box; pct: (b: Box) => React.CSSProperties; scale: number }) {
+function TextEditor({
+  item,
+  box,
+  pct,
+  scale,
+  commitRef,
+  onDragOut,
+}: {
+  item: TextItem;
+  box: Box;
+  pct: (b: Box) => React.CSSProperties;
+  scale: number;
+  commitRef: React.MutableRefObject<(() => void) | null>;
+  onDragOut: (pointerId: number, start: { clientX: number; clientY: number }) => void;
+}) {
   const [text, setText] = useState(item.text);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -281,12 +317,22 @@ function TextEditor({ item, box, pct, scale }: { item: TextItem; box: Box; pct: 
     ref.current?.select();
   }, []);
   const closed = useRef(false);
+  const textRef = useRef(text);
+  textRef.current = text;
   const close = (commit: boolean) => {
     if (closed.current) return;
     closed.current = true;
-    if (commit && text !== item.text) updateItem(item.id, { text: text || ' ' });
+    const value = textRef.current;
+    if (commit && value !== item.text) updateItem(item.id, { text: value || ' ' });
     editorState().setEditingText(null);
   };
+  useEffect(() => {
+    commitRef.current = () => close(true);
+    return () => {
+      commitRef.current = null;
+    };
+  });
+  const dragStart = useRef<{ id: number; x: number; y: number } | null>(null);
   // 欄は文字の外枠より少し広めにとり、短い文字でも入力しやすくする
   const minW = Math.max(box.w, item.style.fontSize * 6);
   const editBox = { x: box.x + box.w / 2 - minW / 2, y: box.y, w: minW, h: box.h };
@@ -306,6 +352,17 @@ function TextEditor({ item, box, pct, scale }: { item: TextItem; box: Box; pct: 
         }}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => close(true)}
+        onPointerDown={(e) => {
+          dragStart.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        }}
+        onPointerMove={(e) => {
+          const t = dragStart.current;
+          if (!t || t.id !== e.pointerId || Math.hypot(e.clientX - t.x, e.clientY - t.y) < 8) return;
+          dragStart.current = null;
+          close(true);
+          onDragOut(e.pointerId, { clientX: t.x, clientY: t.y });
+        }}
+        onPointerUp={() => (dragStart.current = null)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') close(false);
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) close(true);
