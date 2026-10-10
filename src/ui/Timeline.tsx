@@ -13,7 +13,7 @@ const RULER_H = 28;
 const HEAD_W = 36;
 const SNAP_PX = 8;
 /** 長押しと判定するまでの時間 */
-const LONG_PRESS_MS = 350;
+const LONG_PRESS_MS = 300;
 /** これ以上指が動いたら長押しではなくスクロールとみなす */
 const MOVE_TOLERANCE = 10;
 
@@ -201,10 +201,14 @@ export function Timeline() {
 
   const onItemPointerDown = (e: React.PointerEvent, item: TimelineItem, mode: DragMode) => {
     e.stopPropagation();
-    // 端のつまみはすぐ伸縮できる。本体はマウスならすぐ、タッチなら長押しで移動
-    const immediate = e.pointerType === 'mouse' || mode !== 'move';
+    // 端のつまみはすぐ伸縮できる。本体はマウスならすぐ。
+    // タッチは、選択済みのアイテムならすぐ動かせ、未選択のものは長押しで動かす（すぐ動かすとスクロール）
+    const isTouch = e.pointerType !== 'mouse';
+    const wasSelected = editorState().selectedItemId === item.id;
+    const immediate = !isTouch || mode !== 'move' || wasSelected;
     let x0 = 0;
     let y0 = 0;
+    let moved = false;
     let snaps: number[] = [];
     press(
       e,
@@ -219,10 +223,16 @@ export function Timeline() {
           s.beginGesture();
         },
         move: (ev) => {
+          if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+          moved = true;
           autoScroll(ev.clientX);
           applyDrag(item, mode, ev.clientX - x0, ev.clientY - y0, snaps, ev.altKey);
         },
-        end: () => editorState().endGesture(),
+        end: () => {
+          editorState().endGesture();
+          // 選択済みのアイテムを動かさずにタップしたら、編集パネルを開く（スマホ）
+          if (isTouch && wasSelected && mode === 'move' && !moved) editorState().setSheet('edit');
+        },
         tap: () => {
           const s = editorState();
           // スマホで選択済みのアイテムをもう一度タップしたら、編集パネルを開く

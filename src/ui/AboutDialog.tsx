@@ -51,7 +51,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
       <h4>スマホでの操作</h4>
       <ul>
         <li>画面下のタブで「タイムライン」「素材」「編集（設定）」を切り替えます。素材と編集はプレビューを見ながら操作できます。</li>
-        <li>アイテムはタップで選択、長押ししてから指を動かすと移動できます（すぐ動かすと画面がスクロールします）。</li>
+        <li>タイムラインのアイテムは、タップで選んでからドラッグすると移動できます。選んでいないアイテムは、長押ししてから動かすと移動、すぐ動かすとスクロールです。</li>
         <li>選んだアイテムの両端の白いつまみで長さを変えられます。</li>
         <li>書き出しが終わったら「共有・写真に保存」から写真アプリなどに保存できます。</li>
       </ul>
@@ -71,6 +71,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
       <p className="muted small">使った音楽・映像の利用条件（著作権・クレジット表記など）は、それぞれの提供元の規約に従ってください。</p>
       <h4>使用しているソフトウェア</h4>
       <p className="muted small">React、Zustand、Immer、fflate（MIT）、Mediabunny・@mediabunny/aac-encoder（MPL-2.0）</p>
+      <p className="muted small">
+        フォント（SIL Open Font License 1.1）：Noto Sans JP、Noto Serif JP、M PLUS Rounded 1c、Zen Maru Gothic、Kosugi Maru、Dela Gothic One、RocknRoll One、Reggae One、Mochiy Pop One、Hachi Maru Pop、Yusei Magic、Zen Kurenaido、DotGothic16
+      </p>
     </Modal>
   );
 }

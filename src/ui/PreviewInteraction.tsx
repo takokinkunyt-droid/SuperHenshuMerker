@@ -66,6 +66,8 @@ export function PreviewInteraction({ frameRef }: { frameRef: React.RefObject<HTM
   const currentTime = useEditor((s) => s.currentTime);
   const selected = useEditor((s) => s.project.items.find((it) => it.id === s.selectedItemId));
   const editingId = useEditor((s) => s.editingTextId);
+  // フォントの読み込みが終わると文字の外枠の大きさが変わるので、描き直す
+  useEditor((s) => s.mediaVersion);
   const [guides, setGuides] = useState<{ xs: number[]; ys: number[] }>({ xs: [], ys: [] });
   const [frameWidth, setFrameWidth] = useState(0);
   const gesture = useRef<Gesture | null>(null);

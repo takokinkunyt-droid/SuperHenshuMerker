@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { boot } from './persist/session';
 import './styles.css';
+import './fonts';
 
 const root = createRoot(document.getElementById('root')!);
 

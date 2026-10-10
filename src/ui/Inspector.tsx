@@ -1,6 +1,6 @@
 import { useEditor } from '../state/store';
 import type { AudioEffects, Placement, SlideDirection, TextStyle, TimelineItem, VisualEffects } from '../types';
-import { ASPECTS, FONT_FAMILIES, MIN_ITEM_DURATION, aspectOf, type AspectKey } from '../state/defaults';
+import { ASPECTS, BUNDLED_FONTS, FONT_OPTIONS, MIN_ITEM_DURATION, SYSTEM_FONTS, aspectOf, type AspectKey } from '../state/defaults';
 import { alignItem, deleteItem, setAspect, updateItem } from '../state/actions';
 import { ColorInput, CommitText, Field, NumberInput, SliderNumber } from './common';
 import { SheetHeader } from './MobileNav';
@@ -316,13 +316,28 @@ export function TextStyleEditor({ style, onChange }: { style: TextStyle; onChang
     <>
       <Field label="フォント">
         <select value={style.fontFamily} onChange={(e) => onChange({ fontFamily: e.target.value })}>
-          {FONT_FAMILIES.map((f) => (
-            <option key={f} value={f}>
-              {f.split(',')[0].replace(/"/g, '')}
-            </option>
-          ))}
+          {!FONT_OPTIONS.some((f) => f.family === style.fontFamily) && (
+            <option value={style.fontFamily}>{style.fontFamily.split(',')[0].replace(/"/g, '')}</option>
+          )}
+          <optgroup label="どの端末でも同じ見た目">
+            {BUNDLED_FONTS.map((f) => (
+              <option key={f.family} value={f.family} style={{ fontFamily: f.family }}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="端末のフォント">
+            {SYSTEM_FONTS.map((f) => (
+              <option key={f.family} value={f.family}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </Field>
+      <div className="font-sample" style={{ fontFamily: style.fontFamily, fontWeight: style.bold ? 700 : 400 }}>
+        あいうえお 漢字 ABC 123
+      </div>
       <Field label="サイズ">
         <SliderNumber value={style.fontSize} min={12} max={200} step={1} digits={0} onChange={(fontSize) => onChange({ fontSize })} />
       </Field>

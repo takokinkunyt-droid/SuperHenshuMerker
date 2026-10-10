@@ -6,6 +6,7 @@ import { media } from '../media/mediaCache';
 import { playback } from '../media/playback';
 import { formatTime, projectDuration } from '../state/timeline';
 import { PreviewInteraction } from './PreviewInteraction';
+import { requestProjectFonts } from '../media/fontLoader';
 
 const QUALITY_KEY = 'shm.previewScale';
 
@@ -44,6 +45,8 @@ export function Preview() {
         canvas.height = h;
       }
       syncVideos(s.project, s.currentTime, s.playing);
+      // 使っているフォントがまだなら読み込みを始め、読み終わったら描き直す
+      requestProjectFonts(s.project, () => editorState().bumpMedia());
       drawFrame(ctx, s.project, s.currentTime, previewSource, quality);
     };
     const schedule = () => {

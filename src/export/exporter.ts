@@ -21,6 +21,7 @@ import {
 import type { Project, VideoItem } from '../types';
 import { MIX_SAMPLE_RATE, media } from '../media/mediaCache';
 import { scheduleAudio } from '../media/audioMix';
+import { ensureProjectFonts } from '../media/fontLoader';
 import { isActiveAt, itemEnd, projectDuration } from '../state/timeline';
 import { drawFrame, type Drawable, type FrameSource } from '../render/renderer';
 
@@ -113,7 +114,7 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
 
   progress(0, '素材を読み込み中…');
   await media.ensureAll(Object.values(project.assets));
-  await document.fonts?.ready;
+  await ensureProjectFonts(project);
   checkAbort();
 
   // 1. 全音声を1本にミックスする
