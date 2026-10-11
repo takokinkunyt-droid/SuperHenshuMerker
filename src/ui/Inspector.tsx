@@ -1,7 +1,11 @@
 import { useEditor } from '../state/store';
-import type { AudioEffects, Placement, SlideDirection, TextStyle, TimelineItem, VisualEffects } from '../types';
+import type { AudioEffects, AudioItem, Placement, SlideDirection, TextBackground, TextShadow, TextStyle, TimelineItem, VisualEffects } from '../types';
 import { ASPECTS, BUNDLED_FONTS, FONT_OPTIONS, MIN_ITEM_DURATION, SYSTEM_FONTS, aspectOf, type AspectKey } from '../state/defaults';
 import { alignItem, deleteItem, setAspect, updateItem } from '../state/actions';
+import { regenerateTts } from '../state/ttsActions';
+import { useVoicevox } from '../voice/voicevoxStore';
+import { VoicevoxHelp } from './TtsDialog';
+import { useEffect } from 'react';
 import { ColorInput, CommitText, Field, NumberInput, SliderNumber } from './common';
 import { SheetHeader } from './MobileNav';
 
@@ -96,6 +100,7 @@ function ItemInspector({ item }: { item: TimelineItem }) {
           <PlacementEditor value={item} onChange={(p) => update(p)} />
         </>
       )}
+      {item.kind === 'audio' && item.tts && <TtsEditor item={item} />}
       {(item.kind === 'video' || item.kind === 'audio') && (
         <div className="form">
           <Field label="音量">
@@ -362,6 +367,133 @@ export function TextStyleEditor({ style, onChange }: { style: TextStyle; onChang
       <Field label="折り返し幅">
         <NumberInput value={style.maxWidth} min={100} step={50} digits={0} onChange={(maxWidth) => onChange({ maxWidth })} />
       </Field>
+      <TextShadowEditor style={style} onChange={onChange} />
+      <TextBackgroundEditor style={style} onChange={onChange} />
     </>
+  );
+}
+
+function TextShadowEditor({ style, onChange }: { style: TextStyle; onChange: (s: Partial<TextStyle>) => void }) {
+  const sh = style.shadow;
+  const set = (p: Partial<TextShadow>) => sh && onChange({ shadow: { ...sh, ...p } });
+  return (
+    <details className="effects" open={!!sh}>
+      <summary>影</summary>
+      <div className="form nested">
+        <Field label="影をつける">
+          <input
+            type="checkbox"
+            checked={!!sh}
+            onChange={(e) =>
+              onChange({
+                shadow: e.target.checked
+                  ? { color: '#000000', blur: Math.round(style.fontSize * 0.12), offsetX: Math.round(style.fontSize * 0.06), offsetY: Math.round(style.fontSize * 0.06) }
+                  : null,
+              })
+            }
+          />
+        </Field>
+        {sh && (
+          <>
+            <Field label="影の色">
+              <ColorInput value={sh.color} onChange={(color) => set({ color })} />
+            </Field>
+            <Field label="ぼかし">
+              <SliderNumber value={sh.blur} min={0} max={60} step={1} digits={0} onChange={(blur) => set({ blur })} />
+            </Field>
+            <Field label="横のずれ">
+              <SliderNumber value={sh.offsetX} min={-40} max={40} step={1} digits={0} onChange={(offsetX) => set({ offsetX })} />
+            </Field>
+            <Field label="縦のずれ">
+              <SliderNumber value={sh.offsetY} min={-40} max={40} step={1} digits={0} onChange={(offsetY) => set({ offsetY })} />
+            </Field>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function TextBackgroundEditor({ style, onChange }: { style: TextStyle; onChange: (s: Partial<TextStyle>) => void }) {
+  const bg = style.background;
+  const set = (p: Partial<TextBackground>) => bg && onChange({ background: { ...bg, ...p } });
+  return (
+    <details className="effects" open={!!bg}>
+      <summary>背景（帯）</summary>
+      <div className="form nested">
+        <Field label="背景をつける">
+          <input
+            type="checkbox"
+            checked={!!bg}
+            onChange={(e) =>
+              onChange({
+                background: e.target.checked
+                  ? { color: '#000000', opacity: 0.6, padding: Math.round(style.fontSize * 0.3), radius: Math.round(style.fontSize * 0.2) }
+                  : null,
+              })
+            }
+          />
+        </Field>
+        {bg && (
+          <>
+            <Field label="背景の色">
+              <ColorInput value={bg.color} onChange={(color) => set({ color })} />
+            </Field>
+            <Field label="不透明度">
+              <SliderNumber value={bg.opacity} min={0} max={1} step={0.05} onChange={(opacity) => set({ opacity })} />
+            </Field>
+            <Field label="余白">
+              <SliderNumber value={bg.padding} min={0} max={120} step={1} digits={0} onChange={(padding) => set({ padding })} />
+            </Field>
+            <Field label="角の丸み">
+              <SliderNumber value={bg.radius} min={0} max={120} step={1} digits={0} onChange={(radius) => set({ radius })} />
+            </Field>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** 合成音声で作った音声：読み上げる文字や声を変えて作り直す */
+function TtsEditor({ item }: { item: AudioItem }) {
+  const tts = item.tts!;
+  const busy = useEditor((s) => s.busy);
+  const { status, styles, refresh } = useVoicevox();
+  useEffect(() => {
+    if (status === 'idle') void refresh();
+  }, [status, refresh]);
+  return (
+    <details className="effects" open>
+      <summary>読み上げ（{tts.styleLabel}）</summary>
+      <div className="form nested">
+        <Field label="読み上げる文字" hint="変えると音声を作り直します（字幕も一緒に変わります）">
+          <CommitText multiline value={tts.text} onCommit={(text) => void regenerateTts(item.id, { text })} />
+        </Field>
+        <Field label="声">
+          <select
+            value={tts.speakerId}
+            onChange={(e) => {
+              const st = styles.find((x) => x.id === Number(e.target.value));
+              if (st) void regenerateTts(item.id, { speakerId: st.id, speakerName: st.speakerName, styleLabel: st.label });
+            }}
+          >
+            {!styles.some((x) => x.id === tts.speakerId) && <option value={tts.speakerId}>{tts.styleLabel}</option>}
+            {styles.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="話速" hint="入力して確定すると作り直します">
+          <NumberInput value={tts.speedScale} min={0.5} max={2} step={0.05} onChange={(speedScale) => void regenerateTts(item.id, { speedScale })} />
+        </Field>
+        <button className="btn" disabled={!!busy} onClick={() => void regenerateTts(item.id, {})}>
+          {busy ?? '音声を作り直す'}
+        </button>
+        {status === 'error' && <VoicevoxHelp error={null} />}
+      </div>
+    </details>
   );
 }

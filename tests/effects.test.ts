@@ -65,3 +65,25 @@ describe('audio fade envelope', () => {
     expect(fadeEnvelope(undefined, 3, 10)).toBe(1);
   });
 });
+
+describe('text background and credits', () => {
+  it('grows the text box by the background padding', async () => {
+    const { textBox, textGlyphBox } = await import('../src/render/effects');
+    const style = { ...defaultTextStyle(1920, 1080), background: { color: '#000', opacity: 0.6, padding: 20, radius: 10 } };
+    const glyph = textGlyphBox(style, [300]);
+    const b = textBox(style, [300]);
+    expect(b.w).toBe(glyph.w + 40);
+    expect(b.h).toBe(glyph.h + 40);
+    expect(b.x).toBe(glyph.x - 20);
+  });
+
+  it('builds one VOICEVOX credit line per speaker', async () => {
+    const { buildCredits } = await import('../src/state/ttsActions');
+    const { createProject } = await import('../src/state/defaults');
+    const p = createProject();
+    const tts = (name: string) => ({ text: 'a', speakerId: 1, speakerName: name, styleLabel: name, speedScale: 1, pitchScale: 0, intonationScale: 1, volumeScale: 1 });
+    const audio = (id: string, name?: string) => ({ kind: 'audio' as const, id, assetId: 'x', layer: 7, start: 0, duration: 1, sourceOffset: 0, volume: 1, ...(name ? { tts: tts(name) } : {}) });
+    p.items.push(audio('a', 'ずんだもん'), audio('b', 'ずんだもん'), audio('c', '四国めたん'), audio('d'));
+    expect(buildCredits(p)).toBe('VOICEVOX:ずんだもん\nVOICEVOX:四国めたん');
+  });
+});

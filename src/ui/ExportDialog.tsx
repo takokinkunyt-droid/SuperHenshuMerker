@@ -5,6 +5,7 @@ import { downloadBlob, safeFileName } from '../persist/session';
 import { playback } from '../media/playback';
 import { formatTime, projectDuration } from '../state/timeline';
 import { Modal } from './common';
+import { buildCredits } from '../state/ttsActions';
 
 type Phase =
   | { kind: 'idle' }
@@ -36,6 +37,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [direct, setDirect] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const abortRef = useRef<AbortController | null>(null);
+  const credits = buildCredits(project);
+  const [copied, setCopied] = useState(false);
   const duration = projectDuration(project);
   const size = outputSize(project, shortSide);
 
@@ -156,6 +159,21 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             閉じる
           </button>
         </div>
+        {credits && (
+          <>
+            <h4>クレジット表記</h4>
+            <p className="muted small">合成音声（VOICEVOX）を使っています。動画の説明欄などに次の表記を入れてください。声ごとの利用規約も確認してください。</p>
+            <textarea readOnly rows={Math.min(5, credits.split('\n').length + 1)} value={credits} />
+            <div className="button-row">
+              <button className="btn small" onClick={() => void navigator.clipboard?.writeText(credits).then(() => setCopied(true))}>
+                {copied ? 'コピーしました' : 'コピー'}
+              </button>
+              <a className="small" href="https://voicevox.hiroshiba.jp/term/" target="_blank" rel="noreferrer">
+                VOICEVOX 利用規約
+              </a>
+            </div>
+          </>
+        )}
         <p className="muted small">使った音楽・映像の利用条件（著作権・クレジット表記など）は、それぞれの提供元の規約に従ってください。</p>
       </div>
     </Modal>

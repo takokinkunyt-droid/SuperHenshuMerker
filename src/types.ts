@@ -27,6 +27,49 @@ export interface TextStyle {
   y: number;
   /** この幅を超えたら折り返す */
   maxWidth: number;
+  /** 文字の影（null・未設定でなし） */
+  shadow?: TextShadow | null;
+  /** 文字の後ろの背景（帯）（null・未設定でなし） */
+  background?: TextBackground | null;
+}
+
+export interface TextShadow {
+  color: string;
+  /** ぼかし（ピクセル） */
+  blur: number;
+  /** 影のずれ（ピクセル、右・下が正） */
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface TextBackground {
+  color: string;
+  /** 不透明度 0〜1 */
+  opacity: number;
+  /** 文字のまわりの余白（ピクセル） */
+  padding: number;
+  /** 角の丸み（ピクセル） */
+  radius: number;
+}
+
+/** 合成音声（VOICEVOX）の設定 */
+export interface VoiceSettings {
+  speakerId: number;
+  /** クレジット表記用（例: ずんだもん） */
+  speakerName: string;
+  /** 一覧での表示名（例: ずんだもん（ノーマル）） */
+  styleLabel: string;
+  speedScale: number;
+  pitchScale: number;
+  intonationScale: number;
+  volumeScale: number;
+}
+
+/** 合成音声で作った音声アイテムが覚えておく情報（あとで文字を直して作り直せる） */
+export interface TtsInfo extends VoiceSettings {
+  text: string;
+  /** 一緒に作った字幕（テキストアイテム）のID */
+  subtitleId?: string | null;
 }
 
 export type SlideDirection = 'left' | 'right' | 'top' | 'bottom';
@@ -105,6 +148,8 @@ export interface AudioItem extends ItemBase {
   sourceOffset: number;
   volume: number;
   audioEffects?: AudioEffects;
+  /** 合成音声で作った音声なら、その読み上げ内容 */
+  tts?: TtsInfo;
 }
 
 export type TimelineItem = TextItem | ImageItem | VideoItem | AudioItem;

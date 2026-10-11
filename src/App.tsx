@@ -6,6 +6,7 @@ import { playback } from './media/playback';
 import { MediaPanel } from './ui/MediaPanel';
 import { MobileNav } from './ui/MobileNav';
 import { EditActions } from './ui/EditActions';
+import { TtsDialog } from './ui/TtsDialog';
 import { Preview } from './ui/Preview';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
@@ -156,6 +157,7 @@ export function App() {
       )}
       {dialog === 'project' && <ProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+      <TtsDialog />
       {dragging && <div className="drop-overlay">ここにドロップして素材を追加</div>}
       <div className="toasts">
         {toasts.map((t) => (

@@ -23,6 +23,8 @@ interface EditorState {
   editingTextId: string | null;
   /** スマホで下から出すパネル */
   sheet: 'media' | 'edit' | null;
+  /** 合成音声（読み上げ）のパネルを開いているか */
+  ttsOpen: boolean;
   /** コピーしたアイテム（同じプロジェクトの中で貼り付けに使う） */
   clipboard: { projectId: string; item: TimelineItem } | null;
   currentTime: number;
@@ -46,6 +48,7 @@ interface EditorState {
   selectItem: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
   setSheet: (sheet: 'media' | 'edit' | null) => void;
+  setTtsOpen: (open: boolean) => void;
   setClipboard: (clip: { projectId: string; item: TimelineItem } | null) => void;
   setTime: (t: number) => void;
   setPlaying: (playing: boolean) => void;
@@ -70,6 +73,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   selectedItemId: null,
   editingTextId: null,
   sheet: null,
+  ttsOpen: false,
   clipboard: null,
   currentTime: 0,
   playing: false,
@@ -149,6 +153,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   selectItem: (id) => set((s) => ({ selectedItemId: id, editingTextId: s.editingTextId === id ? id : null })),
   setEditingText: (id) => set({ editingTextId: id, ...(id ? { selectedItemId: id } : {}) }),
   setSheet: (sheet) => set({ sheet }),
+  setTtsOpen: (ttsOpen) => set({ ttsOpen }),
   setClipboard: (clipboard) => set({ clipboard }),
   setTime: (t) => set({ currentTime: Math.max(0, t) }),
   setPlaying: (playing) => set({ playing }),

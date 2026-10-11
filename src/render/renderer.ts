@@ -1,7 +1,7 @@
 // 1フレームを描く共通処理。プレビューと書き出しで同じ関数を使うので、見た目がずれない。
 import type { Placement, Project, TextItem, TextStyle, TimelineItem, VideoItem, VisualEffects } from '../types';
 import { isActiveAt } from '../state/timeline';
-import { effectState, hasLayerEffect, placedBox, textBox, type Box } from './effects';
+import { effectState, expandBox, hasLayerEffect, placedBox, textBox, textGlyphBox, type Box } from './effects';
 
 export interface Drawable {
   source: CanvasImageSource;
@@ -45,7 +45,7 @@ export function drawFrame(ctx: Ctx, project: Project, t: number, src: FrameSourc
       if (!item.text) continue;
       const lines = layoutText(ctx, item.text, item.style);
       box = textBox(item.style, lines.widths);
-      draw = (c) => drawTextLines(c, lines.lines, item.style);
+      draw = (c) => drawTextLines(c, lines.lines, lines.widths, item.style);
     } else {
       const d = item.kind === 'image' ? src.image(item.assetId) : src.videoFrame(item, t - item.start + item.sourceOffset);
       if (!d || item.opacity <= 0) continue;
@@ -205,24 +205,56 @@ export function textItemBox(ctx: Ctx, item: TextItem): Box {
   return textBox(item.style, layoutText(ctx, item.text, item.style).widths);
 }
 
-function drawTextLines(ctx: Ctx, lines: string[], style: TextStyle) {
+function drawTextLines(ctx: Ctx, lines: string[], widths: number[], style: TextStyle) {
+  // 背景（帯）：文字の外枠に余白を足した角丸の四角
+  const bg = style.background;
+  if (bg && bg.opacity > 0) {
+    const b = expandBox(textGlyphBox(style, widths), bg.padding);
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, bg.opacity);
+    ctx.fillStyle = bg.color;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(b.x, b.y, b.w, b.h, Math.min(bg.radius, b.h / 2, b.w / 2));
+    else ctx.rect(b.x, b.y, b.w, b.h);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
   ctx.font = fontOf(style);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
+  const sh = style.shadow;
+  // キャンバスの影は拡大縮小の影響を受けないので、出力の倍率を掛けておく
+  const m = ctx.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  const setShadow = (on: boolean) => {
+    ctx.shadowColor = on && sh ? sh.color : 'transparent';
+    ctx.shadowBlur = on && sh ? sh.blur * k : 0;
+    ctx.shadowOffsetX = on && sh ? sh.offsetX * k : 0;
+    ctx.shadowOffsetY = on && sh ? sh.offsetY * k : 0;
+  };
   const lineHeight = style.fontSize * 1.25;
   const descent = style.fontSize * 0.2;
   lines.forEach((line, i) => {
     const y = style.y - descent - (lines.length - 1 - i) * lineHeight;
+    // 影は一番外側（縁取りがあれば縁取り）にだけ付け、二重に濃くならないようにする
     if (style.strokeWidth > 0) {
+      setShadow(true);
       ctx.strokeStyle = style.strokeColor;
       ctx.lineWidth = style.strokeWidth * 2;
       ctx.strokeText(line, style.x, y);
+      setShadow(false);
+    } else {
+      setShadow(true);
     }
     ctx.fillStyle = style.color;
     ctx.fillText(line, style.x, y);
+    setShadow(false);
   });
+  ctx.restore();
 }
 
 /** エフェクトをかける前の、アイテムの外枠（吸着や整列に使う）。音声や読み込み前の素材は null */

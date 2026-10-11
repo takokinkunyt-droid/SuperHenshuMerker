@@ -12,12 +12,21 @@ export const easeOutCubic = (p: number) => 1 - Math.pow(1 - Math.min(1, Math.max
 
 /** テキストの外枠（折り返し済みの各行の幅から計算する） */
 export function textBox(style: TextStyle, lineWidths: number[]): Box {
+  const glyph = textGlyphBox(style, lineWidths);
+  // 背景（帯）があるときは、見えている帯の大きさを外枠にする
+  return style.background ? expandBox(glyph, style.background.padding) : glyph;
+}
+
+/** 文字そのもの（縁取り込み）の外枠 */
+export function textGlyphBox(style: TextStyle, lineWidths: number[]): Box {
   const n = Math.max(1, lineWidths.length);
   const lineHeight = style.fontSize * 1.25;
   const w = Math.max(0, ...lineWidths) + style.strokeWidth * 2;
   const h = style.fontSize + (n - 1) * lineHeight + style.strokeWidth;
   return { x: style.x - w / 2, y: style.y - h + style.strokeWidth / 2, w, h };
 }
+
+export const expandBox = (b: Box, pad: number): Box => ({ x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 });
 
 /** 画像・動画の外枠 */
 export function placedBox(p: { x: number; y: number; scale: number }, width: number, height: number): Box {

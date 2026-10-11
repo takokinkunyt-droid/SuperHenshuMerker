@@ -197,6 +197,11 @@ button {
   align-items: center;
   margin-bottom: 12px;
 }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .font-sample {
   margin: -2px 0 2px 100px;
   padding: 4px 8px;

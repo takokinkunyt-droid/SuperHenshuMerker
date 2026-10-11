@@ -28,6 +28,7 @@ const KIND_ICON: Record<TimelineItem['kind'], string> = { text: 'T', image: '�
 
 function itemLabel(project: Project, item: TimelineItem): string {
   if (item.kind === 'text') return item.text;
+  if (item.kind === 'audio' && item.tts) return item.tts.text;
   return project.assets[item.assetId]?.name ?? KIND_LABEL[item.kind];
 }
 
@@ -291,6 +292,9 @@ export function Timeline() {
         <button className="btn add-btn" onClick={addTextItem} title="再生位置にテキストを追加">
           T テキスト
         </button>
+        <button className="btn add-btn" onClick={() => editorState().setTtsOpen(true)} title="合成音声（VOICEVOX）で読み上げ音声を作る">
+          🗣 読み上げ
+        </button>
         <span className="toolbar-sep" />
         <button className="btn small" onClick={splitAtPlayhead} title="再生位置で分割 (S)">
           ✂ 分割
@@ -377,7 +381,7 @@ const Items = memo(function Items({
         >
           <span className="tl-handle left" onPointerDown={(e) => onPointerDown(e, item, 'left')} />
           <span className="tl-label">
-            {KIND_ICON[item.kind]} {itemLabel(project, item)}
+            {item.kind === 'audio' && item.tts ? '🗣' : KIND_ICON[item.kind]} {itemLabel(project, item)}
           </span>
           {hasAnyEffect(item) && (
             <span className="tl-fx" title="エフェクトあり">
