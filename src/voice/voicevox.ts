@@ -58,12 +58,20 @@ export function isLocalVoicevox(url = voicevoxUrl()): boolean {
  */
 export function applyShareLink(): boolean {
   if (typeof location === 'undefined' || !location.hash.includes('voicevox=')) return false;
-  const params = new URLSearchParams(location.hash.slice(1));
+  const ok = applyShareText(location.hash);
+  if (ok) history.replaceState(null, '', location.pathname + location.search);
+  return ok;
+}
+
+/** 貼り付けられた共有リンク（の一部）から接続先と合言葉を取り出して設定する。できたら true */
+export function applyShareText(text: string): boolean {
+  const i = text.indexOf('voicevox=');
+  if (i < 0) return false;
+  const params = new URLSearchParams(text.slice(i).trim());
   const url = params.get('voicevox');
   if (!url || !/^https?:\/\//.test(url)) return false;
   setVoicevoxUrl(url);
   setVoicevoxKey(params.get('key') ?? '');
-  history.replaceState(null, '', location.pathname + location.search);
   return true;
 }
 
@@ -75,10 +83,14 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
   try {
     res = await fetch(`${voicevoxUrl()}${path}`, { ...init, headers });
   } catch {
+    const local = isLocalVoicevox() && !key;
+    const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
     throw new Error(
-      isLocalVoicevox()
-        ? 'VOICEVOXに接続できません。VOICEVOXが起動しているか、このページからの接続を許可しているか確認してください。'
-        : '読み上げサーバーに接続できません。共有している人のパソコンが起動していないか、共有リンクが古くなっている可能性があります。',
+      local && phone
+        ? 'このスマホには読み上げの接続先が設定されていません。VOICEVOXを持っている人から届いた「共有リンク」を開くか、「共有リンク」欄に貼り付けてください。'
+        : local
+          ? 'VOICEVOXに接続できません。VOICEVOXが起動しているか、このページからの接続を許可しているか確認してください。'
+          : '読み上げサーバーに接続できません。共有している人のパソコンで共有サーバー（黒い画面）が動いているか確認し、新しい共有リンクを送ってもらってください。',
     );
   }
   if (res.status === 401) throw new Error('合言葉が違います。共有リンクをもう一度開いてください。');

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
 import type { VoiceSettings } from '../types';
 import { useVoicevox } from '../voice/voicevoxStore';
-import { DEFAULT_VOICEVOX_URL, isLocalVoicevox, setVoicevoxKey, setVoicevoxUrl, synthesize, voicevoxKey, voicevoxUrl } from '../voice/voicevox';
+import { DEFAULT_VOICEVOX_URL, applyShareText, isLocalVoicevox, setVoicevoxKey, setVoicevoxUrl, synthesize, voicevoxKey, voicevoxUrl } from '../voice/voicevox';
 import { loadLastVoice, saveLastVoice, speakAndPlace } from '../state/ttsActions';
 import { Field, Modal, SliderNumber } from './common';
 
@@ -22,6 +22,16 @@ export function VoicevoxHelp({ error }: { error: string | null }) {
       <div className="notice error">
         {error && <p>{error}</p>}
         <p>共有している人に、パソコンで共有サーバーが動いているか確認して、新しい共有リンクを送ってもらってください。</p>
+      </div>
+    );
+  }
+  if (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) {
+    return (
+      <div className="notice error">
+        {error && <p>{error}</p>}
+        <p className="small">
+          LINEで受け取ったリンクは、LINEの中ではなく「ブラウザで開く」（Safari／Chrome）で開いてください。または、届いたリンクをコピーして、上の「共有リンク」欄に貼り付けてください。
+        </p>
       </div>
     );
   }
@@ -110,6 +120,23 @@ function TtsPanel({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="🗣 読み上げ（合成音声）" onClose={onClose} wide>
       <div className="form">
+        <Field label="共有リンク" hint="友達から届いたリンクを貼り付けると、接続先と合言葉が自動で入ります">
+          <input
+            type="text"
+            value=""
+            placeholder="https://…#voicevox=…（ここに貼り付け）"
+            onChange={(e) => {
+              if (applyShareText(e.target.value)) {
+                setUrl(voicevoxUrl());
+                setKey(voicevoxKey());
+                void refresh();
+                editorState().toast('共有リンクから接続先を設定しました');
+              } else if (e.target.value.trim()) {
+                editorState().toast('共有リンクの形が正しくありません。届いたリンクをそのまま貼り付けてください', 'error');
+              }
+            }}
+          />
+        </Field>
         <Field label="VOICEVOX">
           <span className="slider-number">
             <input type="text" value={url} placeholder={DEFAULT_VOICEVOX_URL} onChange={(e) => setUrl(e.target.value)} />
@@ -121,7 +148,11 @@ function TtsPanel({ onClose }: { onClose: () => void }) {
         <Field label="合言葉" hint="友達のVOICEVOXを使うときだけ（共有リンクを開けば自動で入ります）">
           <input type="password" value={key} autoComplete="off" placeholder="自分のパソコンなら空のまま" onChange={(e) => setKey(e.target.value)} />
         </Field>
-        {status === 'ok' && <p className="muted small">接続済み（{styles.length}種類の声）</p>}
+        {status === 'ok' && (
+          <p className="muted small">
+            接続済み（{styles.length}種類の声）・接続先：{isLocalVoicevox() && !voicevoxKey() ? 'このパソコンのVOICEVOX' : '共有サーバー'}
+          </p>
+        )}
         {status === 'error' && <VoicevoxHelp error={error} />}
 
         <Field label="声">
