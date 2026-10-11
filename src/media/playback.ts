@@ -3,6 +3,7 @@ import { editorState } from '../state/store';
 import { projectDuration } from '../state/timeline';
 import { scheduleAudio } from './audioMix';
 import { media } from './mediaCache';
+import { keepAudioAudible, releaseAudio } from './audioUnlock';
 
 class Playback {
   private ctx: AudioContext | null = null;
@@ -28,6 +29,8 @@ class Playback {
     let from = s.currentTime;
     if (from >= duration - 0.01) from = 0;
 
+    // iPhone のマナーモードでも音が出るようにする（ボタンを押した操作の中で呼ぶ必要がある）
+    keepAudioAudible();
     this.ctx ??= new AudioContext();
     await this.ctx.resume();
     // 読み込みに時間のかかる素材があっても再生は始める（読み込めたものから鳴る）
@@ -55,6 +58,7 @@ class Playback {
 
   pause() {
     cancelAnimationFrame(this.raf);
+    releaseAudio();
     const t = this.now();
     for (const n of this.nodes) {
       try {
