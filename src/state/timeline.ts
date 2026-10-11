@@ -73,14 +73,17 @@ export function recenterItems(project: Project, oldWidth: number, oldHeight: num
 
 /** 0.5秒刻みなど、画面上で区切りの良い目盛り間隔を選ぶ */
 export function rulerStep(pxPerSec: number): number {
-  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300];
-  return steps.find((s) => s * pxPerSec >= 70) ?? 600;
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+  return steps.find((s) => s * pxPerSec >= 70) ?? 7200;
 }
 
+/** 0:05.12 のような表示。1時間を超えたら 1:02:05.12 */
 export function formatTime(sec: number, fps = 30): string {
   const s = Math.max(0, sec);
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const ss = Math.floor(s % 60);
   const f = Math.floor((s - Math.floor(s)) * fps + 1e-6);
-  return `${m}:${String(ss).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+  const tail = `${String(ss).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${tail}` : `${m}:${tail}`;
 }

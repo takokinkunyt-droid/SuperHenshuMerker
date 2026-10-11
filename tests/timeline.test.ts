@@ -93,3 +93,12 @@ describe('wrapLines', () => {
     expect(wrapLines(measure, 'ab\ncd', 100)).toEqual(['ab', 'cd']);
   });
 });
+
+describe('formatTime', () => {
+  it('shows minutes, and hours past one hour', async () => {
+    const { formatTime, rulerStep } = await import('../src/state/timeline');
+    expect(formatTime(65.5, 30)).toBe('1:05.15');
+    expect(formatTime(3725, 30)).toBe('1:02:05.00');
+    expect(rulerStep(0.2)).toBe(600);
+  });
+});

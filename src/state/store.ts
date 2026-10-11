@@ -157,7 +157,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   setClipboard: (clipboard) => set({ clipboard }),
   setTime: (t) => set({ currentTime: Math.max(0, t) }),
   setPlaying: (playing) => set({ playing }),
-  setPxPerSec: (v) => set({ pxPerSec: Math.min(600, Math.max(5, v)) }),
+  setPxPerSec: (v) => set({ pxPerSec: Math.min(600, Math.max(0.2, v)) }),
   bumpMedia: () => set((s) => ({ mediaVersion: s.mediaVersion + 1 })),
   toast: (text, kind = 'info') => {
     const id = ++toastSeq;

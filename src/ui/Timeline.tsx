@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
 import type { Project, TimelineItem } from '../types';
 import { MIN_ITEM_DURATION, MIN_LAYERS } from '../state/defaults';
@@ -62,7 +62,10 @@ export function Timeline() {
   const maxLayer = project.items.reduce((m, it) => Math.max(m, it.layer), 0);
   const layers = Math.max(MIN_LAYERS, maxLayer + 3);
   const duration = projectDuration(project);
-  const contentW = Math.max(duration + 30, 60) * pps;
+  /** 右端までスクロールした位置（秒）。ここより先にも余白を足して、タイムラインをどこまでも伸ばせるようにする */
+  const [scrolledEnd, setScrolledEnd] = useState(0);
+  const contentEnd = Math.max(60, duration + 60, scrolledEnd + 60);
+  const contentW = contentEnd * pps;
 
   // 再生中は再生位置が見えるようにスクロールする
   useEffect(
@@ -307,6 +310,19 @@ export function Timeline() {
         </button>
         <span className="spacer" />
         <span className="hint">赤い線はドラッグ・長押しで移動</span>
+        <button
+          className="icon-btn"
+          title="全体を表示"
+          aria-label="タイムライン全体を表示"
+          onClick={() => {
+            const el = scrollRef.current;
+            if (!el) return;
+            editorState().setPxPerSec((el.clientWidth - 40) / Math.max(10, duration));
+            el.scrollLeft = 0;
+          }}
+        >
+          ↔
+        </button>
         <button className="icon-btn" title="縮小" aria-label="タイムラインを縮小" onClick={() => editorState().setPxPerSec(pps / 1.4)}>
           −
         </button>
@@ -328,7 +344,11 @@ export function Timeline() {
           className="timeline-scroll"
           ref={scrollRef}
           onScroll={(e) => {
-            if (headsRef.current) headsRef.current.style.transform = `translateY(${-e.currentTarget.scrollTop}px)`;
+            const el = e.currentTarget;
+            if (headsRef.current) headsRef.current.style.transform = `translateY(${-el.scrollTop}px)`;
+            // 右端に近づいたら、その先にタイムラインを伸ばす（30秒単位で更新して描き直しを減らす）
+            const endSec = Math.ceil((el.scrollLeft + el.clientWidth) / pps / 30) * 30;
+            if (endSec > scrolledEnd) setScrolledEnd(endSec);
           }}
           onWheel={(e) => {
             if (e.ctrlKey || e.metaKey) {
@@ -338,7 +358,7 @@ export function Timeline() {
           }}
         >
           <div className="timeline-content" style={{ width: contentW, height: RULER_H + layers * ROW_H }}>
-            <Ruler pps={pps} width={contentW} fps={project.fps} onPointerDown={onScrubHandleDown} />
+            <Ruler pps={pps} fps={project.fps} scrollRef={scrollRef} onPointerDown={onScrubHandleDown} />
             <div className="tracks" style={{ top: RULER_H, height: layers * ROW_H }} onPointerDown={onTracksPointerDown}>
               {Array.from({ length: layers }, (_, i) => (
                 <div key={i} className="track-row" style={{ top: i * ROW_H, height: ROW_H }} />
@@ -397,20 +417,47 @@ const Items = memo(function Items({
 
 function Ruler({
   pps,
-  width,
   fps,
+  scrollRef,
   onPointerDown,
 }: {
   pps: number;
-  width: number;
   fps: number;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   onPointerDown: (e: React.PointerEvent) => void;
 }) {
+  // 長い動画でも重くならないよう、目盛りは見えている範囲だけ描く
+  const [view, setView] = useState({ left: 0, width: 2000 });
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      setView((v) => (v.left === el.scrollLeft && v.width === el.clientWidth ? v : { left: el.scrollLeft, width: el.clientWidth }));
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    el.addEventListener('scroll', schedule, { passive: true });
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', schedule);
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [scrollRef]);
+
   const step = rulerStep(pps);
+  const from = Math.max(0, Math.floor((view.left - 200) / pps / step)) * step;
+  const to = (view.left + view.width + 200) / pps;
   const ticks = [];
-  for (let t = 0; t * pps < width; t += step) {
+  for (let i = Math.round(from / step); i * step <= to; i++) {
+    const t = i * step;
     ticks.push(
-      <div key={t} className="tick" style={{ left: t * pps }}>
+      <div key={i} className="tick" style={{ left: t * pps }}>
         <span>{formatTime(t, fps).replace(/\.00$/, '')}</span>
       </div>,
     );
