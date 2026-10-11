@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
 import type { VoiceSettings } from '../types';
 import { useVoicevox } from '../voice/voicevoxStore';
-import { DEFAULT_VOICEVOX_URL, setVoicevoxUrl, synthesize, voicevoxUrl } from '../voice/voicevox';
+import { DEFAULT_VOICEVOX_URL, isLocalVoicevox, setVoicevoxKey, setVoicevoxUrl, synthesize, voicevoxKey, voicevoxUrl } from '../voice/voicevox';
 import { loadLastVoice, saveLastVoice, speakAndPlace } from '../state/ttsActions';
 import { Field, Modal, SliderNumber } from './common';
 
@@ -16,6 +16,15 @@ const DEFAULT_VOICE: Omit<VoiceSettings, 'speakerId' | 'speakerName' | 'styleLab
 
 /** VOICEVOXに接続できないときの案内 */
 export function VoicevoxHelp({ error }: { error: string | null }) {
+  // 合言葉を使っている＝友達の共有サーバーにつないでいる
+  if (!isLocalVoicevox() || voicevoxKey()) {
+    return (
+      <div className="notice error">
+        {error && <p>{error}</p>}
+        <p>共有している人に、パソコンで共有サーバーが動いているか確認して、新しい共有リンクを送ってもらってください。</p>
+      </div>
+    );
+  }
   return (
     <div className="notice error">
       {error && <p>{error}</p>}
@@ -48,6 +57,7 @@ function TtsPanel({ onClose }: { onClose: () => void }) {
   const { status, error, styles, refresh } = useVoicevox();
   const busy = useEditor((s) => s.busy);
   const [url, setUrl] = useState(voicevoxUrl);
+  const [key, setKey] = useState(voicevoxKey);
   const last = loadLastVoice();
   const [speakerId, setSpeakerId] = useState<number | null>(last?.speakerId ?? null);
   const [params, setParams] = useState({ ...DEFAULT_VOICE, ...(last ?? {}) });
@@ -67,6 +77,7 @@ function TtsPanel({ onClose }: { onClose: () => void }) {
 
   const connect = () => {
     setVoicevoxUrl(url || DEFAULT_VOICEVOX_URL);
+    setVoicevoxKey(key.trim());
     void refresh();
   };
 
@@ -106,6 +117,9 @@ function TtsPanel({ onClose }: { onClose: () => void }) {
               {status === 'loading' ? '接続中…' : status === 'ok' ? '再接続' : '接続'}
             </button>
           </span>
+        </Field>
+        <Field label="合言葉" hint="友達のVOICEVOXを使うときだけ（共有リンクを開けば自動で入ります）">
+          <input type="password" value={key} autoComplete="off" placeholder="自分のパソコンなら空のまま" onChange={(e) => setKey(e.target.value)} />
         </Field>
         {status === 'ok' && <p className="muted small">接続済み（{styles.length}種類の声）</p>}
         {status === 'error' && <VoicevoxHelp error={error} />}

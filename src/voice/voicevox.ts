@@ -4,6 +4,7 @@ import type { VoiceSettings } from '../types';
 
 export const DEFAULT_VOICEVOX_URL = 'http://127.0.0.1:50021';
 const URL_KEY = 'shm.voicevoxUrl';
+const PASS_KEY = 'shm.voicevoxKey';
 
 export interface VoicevoxStyle {
   id: number;
@@ -28,13 +29,59 @@ export function setVoicevoxUrl(url: string) {
   }
 }
 
-async function call(path: string, init?: RequestInit): Promise<Response> {
+/** 友達のVOICEVOX（共有サーバー）に入るための合言葉 */
+export function voicevoxKey(): string {
+  try {
+    return localStorage.getItem(PASS_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setVoicevoxKey(key: string) {
+  try {
+    if (key) localStorage.setItem(PASS_KEY, key);
+    else localStorage.removeItem(PASS_KEY);
+  } catch {
+    // 保存できなくても今回の接続には使える
+  }
+}
+
+/** 自分のパソコンのVOICEVOXか（共有サーバーではないか） */
+export function isLocalVoicevox(url = voicevoxUrl()): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url);
+}
+
+/**
+ * 共有リンク（…#voicevox=URL&key=合言葉）で開かれたら、読み上げの接続先を設定してリンクから消す。
+ * 設定したら true を返す。
+ */
+export function applyShareLink(): boolean {
+  if (typeof location === 'undefined' || !location.hash.includes('voicevox=')) return false;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const url = params.get('voicevox');
+  if (!url || !/^https?:\/\//.test(url)) return false;
+  setVoicevoxUrl(url);
+  setVoicevoxKey(params.get('key') ?? '');
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+
+async function call(path: string, init: RequestInit = {}): Promise<Response> {
+  const key = voicevoxKey();
+  const headers = new Headers(init.headers);
+  if (key) headers.set('Authorization', `Bearer ${key}`);
   let res: Response;
   try {
-    res = await fetch(`${voicevoxUrl()}${path}`, init);
+    res = await fetch(`${voicevoxUrl()}${path}`, { ...init, headers });
   } catch {
-    throw new Error('VOICEVOXに接続できません。VOICEVOXが起動しているか、このページからの接続を許可しているか確認してください。');
+    throw new Error(
+      isLocalVoicevox()
+        ? 'VOICEVOXに接続できません。VOICEVOXが起動しているか、このページからの接続を許可しているか確認してください。'
+        : '読み上げサーバーに接続できません。共有している人のパソコンが起動していないか、共有リンクが古くなっている可能性があります。',
+    );
   }
+  if (res.status === 401) throw new Error('合言葉が違います。共有リンクをもう一度開いてください。');
   if (!res.ok) throw new Error(`VOICEVOXがエラーを返しました (${res.status})`);
   return res;
 }

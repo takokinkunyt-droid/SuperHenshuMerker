@@ -44,6 +44,10 @@ VOICEVOX エンジン（既定 `http://127.0.0.1:50021`）にブラウザから�
 
 ブラウザに「ローカルネットワークへのアクセス」の確認が出たら許可してください。VOICEVOX の音声を使った動画には `VOICEVOX:キャラ名` のクレジット表記が必要です。
 
+### 友達と VOICEVOX を共有する（スマホから読み上げを使う）
+
+`tools/voicevox-share.bat`（Windows、Mac・Linux は `node tools/voicevox-share.mjs`）を起動すると、自分の VOICEVOX を合言葉付きの共有サーバー＋ Cloudflare のトンネルで公開し、**友達に送る共有リンク**を表示します。友達はそのリンクを開くだけで、スマホからでも「🗣 読み上げ」が使えます。詳しい手順は [docs/voicevox-share.md](docs/voicevox-share.md) を見てください。
+
 ## 使い方
 
 1. 何も選んでいない状態のプロジェクト設定で「画面の比率」を選ぶ（新規作成時にも選べます）

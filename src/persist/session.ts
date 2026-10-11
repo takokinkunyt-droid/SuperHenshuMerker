@@ -7,6 +7,7 @@ import { primeProjectMedia } from '../state/actions';
 import { playback } from '../media/playback';
 import { lastProjectId, loadStoredProject, requestPersistentStorage, saveProject } from './projects';
 import { exportProjectZip, importProjectZip } from './zip';
+import { applyShareLink } from '../voice/voicevox';
 import { migrateProject } from './migrate';
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
@@ -43,6 +44,8 @@ function switchTo(project: Project) {
 }
 
 export async function boot(): Promise<void> {
+  // 友達から送られた共有リンクで開いたら、読み上げの接続先を設定する
+  const shared = applyShareLink();
   // Firefoxは許可の確認ダイアログに答えるまで結果が返らないので、起動を待たせない
   void requestPersistentStorage().then((persisted) => useSaveStatus.setState({ persisted }));
   let project: Project | null = null;
@@ -56,6 +59,7 @@ export async function boot(): Promise<void> {
     console.warn('前回のプロジェクトを読み込めませんでした', err);
   }
   switchTo(project ?? createProject());
+  if (shared) editorState().toast('読み上げ（VOICEVOX）の接続先を設定しました。「🗣 読み上げ」から使えます');
 
   // 編集のたびに1秒後に自動保存（ドラッグ中は保存しない）
   useEditor.subscribe((s, prev) => {
