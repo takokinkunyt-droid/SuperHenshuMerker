@@ -7,6 +7,7 @@ import { MediaPanel } from './ui/MediaPanel';
 import { MobileNav } from './ui/MobileNav';
 import { EditActions } from './ui/EditActions';
 import { TtsDialog } from './ui/TtsDialog';
+import { CollabButton, CollabDialog } from './ui/CollabDialog';
 import { Preview } from './ui/Preview';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
@@ -127,6 +128,7 @@ export function App() {
         <span className={`save-status ${saveStatus}`}>{SAVE_LABEL[saveStatus]}</span>
         <span className="spacer" />
         <EditActions />
+        <CollabButton />
         <button className="btn ghost" onClick={() => setDialog('about')} aria-label="使い方">
           ？<span className="help-label"> 使い方</span>
         </button>
@@ -158,6 +160,7 @@ export function App() {
       {dialog === 'project' && <ProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       <TtsDialog />
+      <CollabDialog />
       {dragging && <div className="drop-overlay">ここにドロップして素材を追加</div>}
       <div className="toasts">
         {toasts.map((t) => (

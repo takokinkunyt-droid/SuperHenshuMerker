@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// VOICEVOX 共有サーバー：自分のパソコンの VOICEVOX を、友達がスーパー編集メーカーから使えるようにする。
+// 共有サーバー：自分のパソコンの VOICEVOX と共同作業を、友達がスーパー編集メーカーから使えるようにする。
 //
 // しくみ：
 //   友達のブラウザ ──https──▶ Cloudflare のトンネル ──▶ このサーバー（合言葉を確認）──▶ VOICEVOX
 //
 // - 合言葉（自動で作って voicevox-share.json に保存）を知っている人だけが使える
 // - 読み上げに必要な機能（声の一覧・読み上げ）だけを通し、VOICEVOX の設定変更などは通さない
+// - 共同作業（同じプロジェクトをみんなで編集）の中継もする（collab-server.mjs、データは collab-data フォルダ）
 // - cloudflared があればトンネルも自動で開き、友達に送る「共有リンク」を表示する
 //
 // 使い方：VOICEVOX を起動してから  node tools/voicevox-share.mjs
@@ -17,6 +18,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createCollab } from './collab-server.mjs';
 
 const APP_URL = 'https://takokinkunyt-droid.github.io/SuperHenshuMerker/';
 const args = process.argv.slice(2);
@@ -47,6 +49,9 @@ if (!config.key || args.includes('--new-key')) {
 }
 const KEY = config.key;
 
+// ---------- 共同作業 ----------
+const collab = createCollab(join(here, 'collab-data'));
+
 // ---------- 中継サーバー ----------
 /** 通してよい機能だけ（メソッド＋パス） */
 const ALLOWED = new Set(['GET /version', 'GET /speakers', 'POST /audio_query', 'POST /synthesis']);
@@ -56,7 +61,7 @@ function cors(req, res) {
   const origin = req.headers.origin;
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   res.setHeader('Access-Control-Max-Age', '600');
   // Chrome の「ローカルネットワークへのアクセス」の事前確認に答える
@@ -88,12 +93,17 @@ const server = http.createServer(async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') return send(res, 204, '');
   const url = new URL(req.url, 'http://x');
-  if (req.method === 'GET' && url.pathname === '/') return send(res, 200, 'スーパー編集メーカー VOICEVOX 共有サーバー');
+  if (req.method === 'GET' && url.pathname === '/') return send(res, 200, 'スーパー編集メーカー 共有サーバー（読み上げ・共同作業）');
 
-  const auth = req.headers.authorization ?? '';
+  // 変更のお知らせ（EventSource）はヘッダーを付けられないので、合言葉を ?key= でも受け付ける
+  const auth = req.headers.authorization ?? (url.searchParams.get('key') ? `Bearer ${url.searchParams.get('key')}` : '');
   if (auth !== `Bearer ${KEY}`) {
     console.log(`🔒 合言葉が違うアクセスがありました（${url.pathname}）`);
     return send(res, 401, '合言葉が違います');
+  }
+  if (url.pathname.startsWith('/collab/')) {
+    await collab.handle(req, res, url);
+    return;
   }
   if (!ALLOWED.has(`${req.method} ${url.pathname}`)) return send(res, 403, 'この機能は共有していません');
   if (url.pathname === '/audio_query' && (url.searchParams.get('text') ?? '').length > MAX_TEXT) {
@@ -158,7 +168,7 @@ function showLink(publicUrl) {
   console.log('\n==================== 友達に送る共有リンク ====================');
   console.log(link);
   console.log('==============================================================');
-  console.log('このリンクを開くと、スーパー編集メーカーの「🗣 読み上げ」があなたの VOICEVOX につながります。');
+  console.log('このリンクを開くと、スーパー編集メーカーの「🗣 読み上げ」と「👥 共同作業」がこのサーバーにつながります。');
   console.log('※ LINE で受け取ったら、右上のメニューから「ブラウザで開く」（Safari／Chrome）で開いてもらってください。');
   console.log('  または、アプリの「🗣 読み上げ」→「共有リンクを貼り付け」にリンクを貼り付けても設定できます。');
   console.log(`※ 確認用：${publicUrl} をスマホのブラウザで開いて「共有サーバー」と表示されればつながっています。`);
@@ -197,7 +207,7 @@ function startTunnel() {
 }
 
 server.listen(PORT, '127.0.0.1', async () => {
-  console.log(`スーパー編集メーカー VOICEVOX 共有サーバー（http://127.0.0.1:${PORT} → ${ENGINE}）`);
+  console.log(`スーパー編集メーカー 共有サーバー（http://127.0.0.1:${PORT}、VOICEVOX: ${ENGINE}）`);
   await checkEngine();
   if (NO_TUNNEL) {
     console.log('トンネルなしで起動しました。');

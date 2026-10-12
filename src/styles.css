@@ -285,6 +285,47 @@ details.effects {
   opacity: 0.38;
   cursor: default;
 }
+.collab-icon {
+  font-size: 15px;
+  line-height: 18px;
+}
+.collab-short {
+  display: none;
+}
+.collab-btn.on .collab-icon {
+  filter: drop-shadow(0 0 4px #51cf66);
+}
+.collab-btn.on.reconnecting .collab-icon {
+  filter: drop-shadow(0 0 4px #fcc419);
+}
+.collab-users {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.collab-users .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.tl-who {
+  flex: none;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  color: #111;
+  font-weight: 700;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .save-status {
   font-size: 12px;
   color: var(--muted);
@@ -1249,9 +1290,15 @@ details .field + .field {
   .act-btn {
     flex-direction: column;
     gap: 1px;
-    padding: 2px 3px;
-    min-width: 40px;
+    padding: 2px 1px;
+    min-width: 34px;
     font-size: 10px;
+  }
+  .collab-long {
+    display: none;
+  }
+  .collab-short {
+    display: inline;
   }
   .header .spacer {
     display: none;
@@ -1272,8 +1319,12 @@ details .field + .field {
   }
   .project-btn {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: none;
     overflow: hidden;
+  }
+  .header > .btn {
+    padding: 6px 7px;
+    font-size: 12px;
   }
 
   .quality {

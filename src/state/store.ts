@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { produce, type Draft } from 'immer';
 import type { Project, TimelineItem } from '../types';
+import { applyOps, type Op } from '../collab/ops';
 import { createProject } from './defaults';
 
 const HISTORY_LIMIT = 200;
@@ -42,6 +43,10 @@ interface EditorState {
   /** まとめ操作を取り消して、始める前の状態に戻す（履歴は増やさない） */
   cancelGesture: () => void;
   undo: () => void;
+  /** 共同作業の相手からの変更を当てはめる（自分の元に戻す履歴にも当てはめ、履歴は増やさない） */
+  applyRemoteOps: (ops: Op[]) => void;
+  /** 共同作業でサーバーの内容に置き換える（履歴は消す） */
+  replaceProjectRemote: (project: Project) => void;
   redo: () => void;
   loadProject: (project: Project) => void;
 
@@ -122,6 +127,18 @@ export const useEditor = create<EditorState>()((set, get) => ({
     const { gestureBase } = get();
     if (gestureBase) set({ project: gestureBase, gestureBase: null });
   },
+
+  applyRemoteOps: (ops) => {
+    const { project, past, future, gestureBase } = get();
+    set({
+      project: applyOps(project, ops),
+      past: past.map((p) => applyOps(p, ops)),
+      future: future.map((p) => applyOps(p, ops)),
+      gestureBase: gestureBase ? applyOps(gestureBase, ops) : null,
+    });
+  },
+
+  replaceProjectRemote: (project) => set({ project, past: [], future: [], gestureBase: null }),
 
   undo: () => {
     const { past, project, future } = get();

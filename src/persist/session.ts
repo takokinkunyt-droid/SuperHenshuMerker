@@ -7,7 +7,8 @@ import { primeProjectMedia } from '../state/actions';
 import { playback } from '../media/playback';
 import { lastProjectId, loadStoredProject, requestPersistentStorage, saveProject } from './projects';
 import { exportProjectZip, importProjectZip } from './zip';
-import { applyShareLink } from '../voice/voicevox';
+import { applyShareLink, voicevoxKey, voicevoxUrl } from '../voice/voicevox';
+import { joinCollab, resumeCollabFor, retargetCollab } from '../collab/client';
 import { migrateProject } from './migrate';
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
@@ -39,8 +40,21 @@ function switchTo(project: Project) {
   playback.pause();
   editorState().loadProject(project);
   primeProjectMedia();
+  // 共同作業中だったプロジェクトならつなぎ直し、そうでなければ共同作業を終える
+  resumeCollabFor(project.id);
   lastSaved = null;
   void flush();
+}
+
+function onShareLink(shared: { ok: boolean; room: string | null }) {
+  if (shared.room) {
+    // 招待リンク：共同作業に参加する（プロジェクトはサーバーから届く）
+    joinCollab(voicevoxUrl(), voicevoxKey(), shared.room);
+    editorState().toast('共同作業に参加しています…');
+  } else if (shared.ok) {
+    retargetCollab();
+    editorState().toast('共有サーバーの接続先を設定しました。「🗣 読み上げ」や「👥 共同作業」が使えます');
+  }
 }
 
 export async function boot(): Promise<void> {
@@ -59,7 +73,9 @@ export async function boot(): Promise<void> {
     console.warn('前回のプロジェクトを読み込めませんでした', err);
   }
   switchTo(project ?? createProject());
-  if (shared) editorState().toast('読み上げ（VOICEVOX）の接続先を設定しました。「🗣 読み上げ」から使えます');
+  onShareLink(shared);
+  // アプリを開いたまま共有リンク・招待リンクを開いた（# の後ろだけが変わった）とき
+  window.addEventListener('hashchange', () => onShareLink(applyShareLink()));
 
   // 編集のたびに1秒後に自動保存（ドラッグ中は保存しない）
   useEditor.subscribe((s, prev) => {

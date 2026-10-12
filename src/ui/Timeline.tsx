@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { editorState, useEditor } from '../state/store';
 import type { Project, TimelineItem } from '../types';
 import { MIN_ITEM_DURATION, MIN_LAYERS } from '../state/defaults';
@@ -7,6 +7,7 @@ import { playback } from '../media/playback';
 import { addTextItem, deleteItem, duplicateItem, splitAtPlayhead } from '../state/actions';
 import { AddButtons } from './MediaPanel';
 import { hasAnyEffect } from '../render/effects';
+import { clientId, useCollab, type Participant } from '../collab/client';
 
 const ROW_H = 40;
 const RULER_H = 28;
@@ -54,6 +55,13 @@ export function Timeline() {
   const project = useEditor((s) => s.project);
   const pps = useEditor((s) => s.pxPerSec);
   const selectedId = useEditor((s) => s.selectedItemId);
+  // 共同作業で、ほかの人が選んでいるアイテム
+  const users = useCollab((s) => s.users);
+  const others = useMemo(() => {
+    const m = new Map<string, Participant>();
+    for (const u of users) if (u.id !== clientId && u.selected) m.set(u.selected, u);
+    return m;
+  }, [users]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headsRef = useRef<HTMLDivElement>(null);
   /** ドラッグ中はタッチによるスクロールを止める */
@@ -363,7 +371,7 @@ export function Timeline() {
               {Array.from({ length: layers }, (_, i) => (
                 <div key={i} className="track-row" style={{ top: i * ROW_H, height: ROW_H }} />
               ))}
-              <Items project={project} pps={pps} selectedId={selectedId} onPointerDown={onItemPointerDown} />
+              <Items project={project} pps={pps} selectedId={selectedId} others={others} onPointerDown={onItemPointerDown} />
             </div>
             <Playhead pps={pps} onPointerDown={onScrubHandleDown} />
           </div>
@@ -377,11 +385,13 @@ const Items = memo(function Items({
   project,
   pps,
   selectedId,
+  others,
   onPointerDown,
 }: {
   project: Project;
   pps: number;
   selectedId: string | null;
+  others: Map<string, Participant>;
   onPointerDown: (e: React.PointerEvent, item: TimelineItem, mode: DragMode) => void;
 }) {
   return (
@@ -395,6 +405,7 @@ const Items = memo(function Items({
             width: Math.max(2, item.duration * pps),
             top: item.layer * ROW_H + 3,
             height: ROW_H - 6,
+            ...(others.has(item.id) ? { boxShadow: `0 0 0 2px ${others.get(item.id)!.color}` } : {}),
           }}
           title={`${KIND_LABEL[item.kind]}: ${itemLabel(project, item)}`}
           onPointerDown={(e) => onPointerDown(e, item, 'move')}
@@ -403,6 +414,11 @@ const Items = memo(function Items({
           <span className="tl-label">
             {item.kind === 'audio' && item.tts ? '🗣' : KIND_ICON[item.kind]} {itemLabel(project, item)}
           </span>
+          {others.has(item.id) && (
+            <span className="tl-who" style={{ background: others.get(item.id)!.color }}>
+              {others.get(item.id)!.name}
+            </span>
+          )}
           {hasAnyEffect(item) && (
             <span className="tl-fx" title="エフェクトあり">
               ✨

@@ -56,11 +56,23 @@ export function isLocalVoicevox(url = voicevoxUrl()): boolean {
  * 共有リンク（…#voicevox=URL&key=合言葉）で開かれたら、読み上げの接続先を設定してリンクから消す。
  * 設定したら true を返す。
  */
-export function applyShareLink(): boolean {
-  if (typeof location === 'undefined' || !location.hash.includes('voicevox=')) return false;
+export function applyShareLink(): { ok: boolean; room: string | null } {
+  if (typeof location === 'undefined' || !location.hash.includes('voicevox=')) return { ok: false, room: null };
+  const room = shareRoom(location.hash);
   const ok = applyShareText(location.hash);
   if (ok) history.replaceState(null, '', location.pathname + location.search);
-  return ok;
+  return { ok, room: ok ? room : null };
+}
+
+/** 共有サーバー（合言葉つき）が設定されているか。共同作業に必要 */
+export function hasShareServer(): boolean {
+  return !!voicevoxKey() && !!voicevoxUrl();
+}
+
+/** 招待リンクに入っている共同作業の部屋（プロジェクト）。無ければ null */
+export function shareRoom(text: string): string | null {
+  const i = text.indexOf('voicevox=');
+  return i < 0 ? null : new URLSearchParams(text.slice(i).trim()).get('room');
 }
 
 /** 貼り付けられた共有リンク（の一部）から接続先と合言葉を取り出して設定する。できたら true */
