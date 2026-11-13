@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useEditor } from '../state/store';
 import type { AssetMeta } from '../types';
-import { importAndPlace, importAsset, placeAsset, removeAsset } from '../state/actions';
+import { importAndPlace, importAsset, placeAsset, relinkAsset, removeAsset } from '../state/actions';
+import { media } from '../media/mediaCache';
 import { FileButton } from './common';
 import { SheetHeader } from './MobileNav';
 
@@ -65,8 +67,13 @@ export function MediaPanel() {
 }
 
 function AssetRow({ asset }: { asset: AssetMeta }) {
+  // 読み込みの成否が変わったら描き直す
+  useEditor((s) => s.mediaVersion);
+  const [, redraw] = useState(0);
+  useEffect(() => media.onChange(() => redraw((n) => n + 1)), []);
+  const missing = media.isFailed(asset.id);
   return (
-    <li className="asset-row">
+    <li className={`asset-row ${missing ? 'missing' : ''}`}>
       <span className="asset-icon">{KIND_ICON[asset.kind]}</span>
       <span className="asset-name" title={asset.name}>
         {asset.name}
@@ -76,9 +83,15 @@ function AssetRow({ asset }: { asset: AssetMeta }) {
           {formatSize(asset.size)}
         </small>
       </span>
-      <button className="btn small" onClick={() => placeAsset(asset)} title="再生位置に配置">
-        配置
-      </button>
+      {missing ? (
+        <FileButton className="btn small danger" title="ファイルが見つかりません。同じファイルを選び直してください" onFiles={(f) => void relinkAsset(asset, f[0])}>
+          選び直す
+        </FileButton>
+      ) : (
+        <button className="btn small" onClick={() => placeAsset(asset)} title="再生位置に配置">
+          配置
+        </button>
+      )}
       <button className="icon-btn" onClick={() => removeAsset(asset.id)} title="素材を削除" aria-label={`${asset.name}を削除`}>
         ✕
       </button>

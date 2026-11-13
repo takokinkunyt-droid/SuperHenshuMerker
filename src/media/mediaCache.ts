@@ -70,6 +70,12 @@ class MediaCache {
     this.blobs.set(assetId, blob);
   }
 
+  /** 見つからなかった素材に、選び直したファイルを割り当てる */
+  relink(assetId: string, blob: Blob) {
+    this.failed.delete(assetId);
+    this.blobs.set(assetId, blob);
+  }
+
   async blob(assetId: string): Promise<Blob | null> {
     const hit = this.blobs.get(assetId);
     if (hit) return hit;

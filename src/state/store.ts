@@ -198,7 +198,8 @@ export const useEditor = create<EditorState>()((set, get) => ({
   toast: (text, kind = 'info') => {
     const id = ++toastSeq;
     set((s) => ({ toasts: [...s.toasts, { id, kind, text }] }));
-    setTimeout(() => get().dismissToast(id), kind === 'error' ? 8000 : 4000);
+    // 長い説明は読み終わるまで出しておく
+    setTimeout(() => get().dismissToast(id), Math.min(40000, (kind === 'error' ? 8000 : 4000) + Math.max(0, text.length - 40) * 90));
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setBusy: (busy) => set({ busy }),

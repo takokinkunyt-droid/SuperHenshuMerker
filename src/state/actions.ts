@@ -5,6 +5,7 @@ import { ASPECTS, LAYER, defaultTextStyle, uid, type AspectKey } from './default
 import { findFreeLayer, itemEnd, recenterItems, splitItem } from './timeline';
 import { importBlob, kindOf } from '../media/importer';
 import { media } from '../media/mediaCache';
+import { putAsset } from '../persist/assetStorage';
 import { itemBaseBox } from '../render/renderer';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -19,7 +20,7 @@ export async function importAsset(file: Blob, name: string): Promise<AssetMeta |
   try {
     // 大きなファイルは保存に時間がかかるので、進み具合を出す
     const big = file.size > 200 * 1024 * 1024;
-    const meta = await importBlob(s.project.id, file, name, big ? (r) => s.setBusy(`「${name}」を保存中… ${Math.round(r * 100)}%`) : undefined);
+    const meta = await importBlob(s.project.id, file, name, big ? (r) => s.setBusy(`「${name}」を保存中… ${Math.round(r * 100)}%`) : undefined, (msg) => s.toast(msg, 'error'));
     if (big) s.setBusy(null);
     s.edit((d) => {
       d.assets[meta.id] = meta;
@@ -30,6 +31,21 @@ export async function importAsset(file: Blob, name: string): Promise<AssetMeta |
     s.toast(errorText(err), 'error');
     return null;
   }
+}
+
+/** 素材のファイルが見つからなくなったとき（保存できなかった大きなファイルなど）に、同じファイルを選び直す */
+export async function relinkAsset(asset: AssetMeta, file: Blob): Promise<void> {
+  const s = editorState();
+  if (kindOf({ name: asset.name, type: file.type || asset.mime }) !== asset.kind) {
+    s.toast('種類の違うファイルです。元と同じファイルを選んでください。', 'error');
+    return;
+  }
+  media.relink(asset.id, file);
+  // 保存できればしておく（できなくても、このまま使える）
+  void putAsset(s.project.id, asset.id, file).catch(() => undefined);
+  await media.ensure(asset);
+  s.bumpMedia();
+  if (media.isFailed(asset.id)) s.toast(`「${asset.name}」を読み込めませんでした`, 'error');
 }
 
 /** 素材をタイムラインに置く。映像は画面に収まる大きさにする */
