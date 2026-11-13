@@ -2,7 +2,7 @@
 import type { AssetKind, AssetMeta } from '../types';
 import { uid } from '../state/defaults';
 import { putAsset } from '../persist/assetStorage';
-import { decodeAudioFile, media } from './mediaCache';
+import { STREAM_OVER_SEC, decodeAudioFile, media, probeAudioDuration } from './mediaCache';
 
 const EXT_KIND: Record<string, AssetKind> = {
   png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', bmp: 'image', svg: 'image',
@@ -42,7 +42,7 @@ function probeVideo(blob: Blob): Promise<{ duration: number; width: number; heig
 }
 
 /** Blobを素材として保存し、メタ情報を返す（プロジェクトへの登録は呼び出し側で行う） */
-export async function importBlob(projectId: string, blob: Blob, name: string): Promise<AssetMeta> {
+export async function importBlob(projectId: string, blob: Blob, name: string, onProgress?: (ratio: number) => void): Promise<AssetMeta> {
   const kind = kindOf({ name, type: blob.type });
   if (!kind) throw new Error(`${name}: 対応していないファイル形式です`);
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -54,14 +54,20 @@ export async function importBlob(projectId: string, blob: Blob, name: string): P
     meta.height = bmp.height;
     bmp.close();
   } else if (kind === 'audio') {
-    const buffer = await decodeAudioFile(blob);
-    meta.duration = buffer.duration;
-    media.setAudio(meta.id, buffer);
+    // 長い音声は全部をデコードせず、長さだけ調べる（再生するときに少しずつ読む）
+    const probed = await probeAudioDuration(blob);
+    if (probed && probed > STREAM_OVER_SEC) {
+      meta.duration = probed;
+    } else {
+      const buffer = await decodeAudioFile(blob);
+      meta.duration = buffer.duration;
+      media.setAudio(meta.id, buffer);
+    }
   } else {
     Object.assign(meta, await probeVideo(blob));
   }
 
-  await putAsset(projectId, meta.id, blob);
+  await putAsset(projectId, meta.id, blob, onProgress);
   media.primeBlob(meta.id, blob);
   await media.ensure(meta);
   return meta;

@@ -3,7 +3,7 @@
 // （同じ形式を tools/voicevox-share.mjs のサーバー側でも扱う）
 import type { AssetMeta, Project, TimelineItem } from '../types';
 
-export const META_FIELDS = ['name', 'width', 'height', 'fps', 'backgroundColor'] as const;
+export const META_FIELDS = ['name', 'width', 'height', 'fps', 'backgroundColor', 'layers'] as const;
 type MetaField = (typeof META_FIELDS)[number];
 
 export type Op =

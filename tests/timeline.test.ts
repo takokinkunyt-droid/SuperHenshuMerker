@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject, defaultTextStyle } from '../src/state/defaults';
-import { findFreeLayer, recenterItems, splitItem, trimStart } from '../src/state/timeline';
+import { canPlace, findFreeLayer, nearestLayerShift, recenterItems, splitItem, trimStart } from '../src/state/timeline';
 import { migrateProject } from '../src/persist/migrate';
 import { outputSize } from '../src/export/exporter';
 import { wrapLines } from '../src/render/renderer';
@@ -100,5 +100,27 @@ describe('formatTime', () => {
     expect(formatTime(65.5, 30)).toBe('1:05.15');
     expect(formatTime(3725, 30)).toBe('1:02:05.00');
     expect(rulerStep(0.2)).toBe(600);
+  });
+});
+
+describe('placing a group of items', () => {
+  const at = (id: string, layer: number, start: number, duration = 2): AudioItem => ({ kind: 'audio', id, assetId: 'x', layer, start, duration, sourceOffset: 0, volume: 1 });
+  const items = [at('a', 0, 0), at('b', 1, 0), at('wall', 2, 1), at('far', 4, 0)];
+  const none = () => false;
+
+  it('rejects positions that overlap other items, go above layer 0, or land on a locked layer', () => {
+    const moving = [items[0], items[1]];
+    expect(canPlace(items, moving, 0, none)).toBe(true); // 自分たち同士は重なりに数えない
+    expect(canPlace(items, moving, 1, none)).toBe(false); // b が wall にぶつかる
+    expect(canPlace(items, moving, -1, none)).toBe(false);
+    expect(canPlace(items, [at('a', 0, 5)], 3, (l) => l === 3)).toBe(false);
+  });
+
+  it('finds the nearest free layer shift, preferring the wanted one', () => {
+    const moving = [items[0], items[1]];
+    expect(nearestLayerShift(items, moving, 0, none)).toBe(0);
+    expect(nearestLayerShift(items, moving, 1, none)).toBe(0); // 1つ下はふさがっているので、近い方（元の位置）
+    expect(nearestLayerShift(items, moving, 3, none)).toBe(5); // 3は far、4も far にぶつかるので、その先
+    expect(nearestLayerShift(items, [at('a', 0, 10)], 2, none)).toBe(2);
   });
 });

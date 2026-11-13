@@ -1,5 +1,7 @@
-// 映像エフェクトの計算と、プレビューで位置を合わせるときの吸着計算（どちらも描画に依存しない純粋関数）。
-import type { Project, SlideDirection, TextStyle, TimelineItem, VisualEffects } from '../types';
+// アイテムの外枠の計算と、プレビューで位置を合わせるときの吸着計算（どちらも描画に依存しない純粋関数）。
+import type { Project, TextStyle, TimelineItem } from '../types';
+
+export type SlideDirection = 'left' | 'right' | 'top' | 'bottom';
 
 export interface Box {
   x: number;
@@ -35,35 +37,6 @@ export function placedBox(p: { x: number; y: number; scale: number }, width: num
   return { x: p.x - w / 2, y: p.y - h / 2, w, h };
 }
 
-export interface EffectState {
-  /** 不透明度に掛ける値 */
-  alpha: number;
-  /** 位置のずれ（スライドイン） */
-  dx: number;
-  dy: number;
-  /** 外枠の中心を基準にした拡大率（拡大縮小入場） */
-  zoom: number;
-}
-
-/** アイテム内の時刻 local での、フェード・スライド・拡大縮小の状態 */
-export function effectState(fx: VisualEffects | undefined, local: number, duration: number, box: Box, project: Pick<Project, 'width' | 'height'>): EffectState {
-  const state: EffectState = { alpha: 1, dx: 0, dy: 0, zoom: 1 };
-  if (!fx) return state;
-  if (fx.fadeIn && fx.fadeIn > 0) state.alpha *= Math.min(1, Math.max(0, local / fx.fadeIn));
-  if (fx.fadeOut && fx.fadeOut > 0) state.alpha *= Math.min(1, Math.max(0, (duration - local) / fx.fadeOut));
-  if (fx.slideIn && fx.slideIn.duration > 0) {
-    const rest = 1 - easeOutCubic(local / fx.slideIn.duration);
-    const off = slideOffset(fx.slideIn.direction, box, project);
-    state.dx = off.dx * rest;
-    state.dy = off.dy * rest;
-  }
-  if (fx.zoomIn && fx.zoomIn.duration > 0) {
-    const p = easeOutCubic(local / fx.zoomIn.duration);
-    state.zoom = fx.zoomIn.from + (1 - fx.zoomIn.from) * p;
-  }
-  return state;
-}
-
 /** 外枠が画面の外にちょうど隠れる位置までのずれ */
 export function slideOffset(direction: SlideDirection, box: Box, project: Pick<Project, 'width' | 'height'>) {
   switch (direction) {
@@ -73,21 +46,14 @@ export function slideOffset(direction: SlideDirection, box: Box, project: Pick<P
       return { dx: project.width - box.x, dy: 0 };
     case 'top':
       return { dx: 0, dy: -(box.y + box.h) };
-    case 'bottom':
+    default:
       return { dx: 0, dy: project.height - box.y };
   }
 }
 
-export function hasLayerEffect(fx: VisualEffects | undefined): boolean {
-  return !!fx && ((fx.blur ?? 0) > 0 || (fx.mosaic ?? 0) > 0);
-}
-
+/** タイムラインに「エフェクトあり」の印を出すかどうか */
 export function hasAnyEffect(item: TimelineItem): boolean {
-  const fx = 'effects' in item ? item.effects : undefined;
-  const afx = 'audioEffects' in item ? item.audioEffects : undefined;
-  const visual = !!fx && (hasLayerEffect(fx) || !!fx.fadeIn || !!fx.fadeOut || !!fx.slideIn || !!fx.zoomIn);
-  const audio = !!afx && (!!afx.bass || !!afx.beep || !!afx.noise || !!afx.fadeIn || !!afx.fadeOut);
-  return visual || audio;
+  return ('fx' in item && !!item.fx?.some((f) => !f.off)) || ('afx' in item && !!item.afx?.some((f) => !f.off));
 }
 
 // ---------------- 吸着（スナップ） ----------------

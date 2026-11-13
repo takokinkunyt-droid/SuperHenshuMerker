@@ -10,6 +10,7 @@ import { applyOps, diffProjects, type Op } from './ops';
 import { editorState, useEditor } from '../state/store';
 import { getAsset, putAsset } from '../persist/assetStorage';
 import { saveProject } from '../persist/projects';
+import { migrateProject } from '../persist/migrate';
 import { media } from '../media/mediaCache';
 import { voicevoxKey, voicevoxUrl } from '../voice/voicevox';
 
@@ -248,7 +249,9 @@ class Session {
     });
   }
 
-  private onSnapshot({ project }: { project: Project; rev: number }) {
+  private onSnapshot({ project: raw }: { project: Project; rev: number }) {
+    // 古い版のアプリが置いたプロジェクトは、今の形式に直してから使う（直した分はあとで送り返す）
+    const project = migrateProject(raw);
     const s = editorState();
     const local = s.project.id === this.room ? s.project : null;
     // まだ届いていない変更と、つながっていない間に自分が変えた分は、サーバーの内容に足して送り直す
@@ -265,10 +268,10 @@ class Session {
       this.applying = false;
     }
     media.setProject(merged.id);
-    this.synced = project;
+    this.synced = raw;
     void saveProject(merged);
     useCollab.setState({ status: 'online', error: null });
-    if (pending.length) this.flush();
+    this.flush();
     void this.fetchMissingAssets(Object.values(merged.assets));
     void this.sendPresence();
   }
@@ -352,7 +355,8 @@ class Session {
           for (let attempt = 0; attempt < 60 && !this.stopped; attempt++) {
             const res = await this.request(`/assets/${asset.id}`).catch(() => null);
             if (res?.ok) {
-              const blob = new Blob([await res.arrayBuffer()], { type: asset.mime });
+              // 大きな素材でもメモリに全部は載せない（ブラウザがディスクに置いてくれる）
+              const blob = new Blob([await res.blob()], { type: asset.mime });
               await putAsset(this.room, asset.id, blob);
               this.uploaded.add(asset.id);
               media.primeBlob(asset.id, blob);

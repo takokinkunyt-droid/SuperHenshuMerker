@@ -1,5 +1,5 @@
 // UIから呼ぶ編集操作。ストアの更新に、素材の保存などの非同期処理を組み合わせる。
-import type { AssetKind, AssetMeta, ImageItem, TextItem, TimelineItem, VideoItem } from '../types';
+import type { AssetKind, AssetMeta, ImageItem, LayerState, TextItem, TimelineItem, VideoItem } from '../types';
 import { editorState } from './store';
 import { ASPECTS, LAYER, defaultTextStyle, uid, type AspectKey } from './defaults';
 import { findFreeLayer, itemEnd, recenterItems, splitItem } from './timeline';
@@ -17,12 +17,16 @@ const IMAGE_DURATION = 5;
 export async function importAsset(file: Blob, name: string): Promise<AssetMeta | null> {
   const s = editorState();
   try {
-    const meta = await importBlob(s.project.id, file, name);
+    // 大きなファイルは保存に時間がかかるので、進み具合を出す
+    const big = file.size > 200 * 1024 * 1024;
+    const meta = await importBlob(s.project.id, file, name, big ? (r) => s.setBusy(`「${name}」を保存中… ${Math.round(r * 100)}%`) : undefined);
+    if (big) s.setBusy(null);
     s.edit((d) => {
       d.assets[meta.id] = meta;
     });
     return meta;
   } catch (err) {
+    if (file.size > 200 * 1024 * 1024) s.setBusy(null);
     s.toast(errorText(err), 'error');
     return null;
   }
@@ -123,19 +127,33 @@ export function updateItem(id: string, patch: Partial<TimelineItem>): void {
 }
 
 export function deleteItem(id: string): void {
+  deleteItems([id]);
+}
+
+export function deleteItems(ids: string[]): void {
+  if (!ids.length) return;
   const s = editorState();
+  const gone = new Set(ids);
   s.edit((d) => {
-    d.items = d.items.filter((it) => it.id !== id);
+    d.items = d.items.filter((it) => !gone.has(it.id));
   });
-  if (s.selectedItemId === id) s.selectItem(null);
+  s.setSelection(s.selectedIds.filter((id) => !gone.has(id)));
+}
+
+/** 選択中のすべてのアイテム（無ければ空） */
+export function selectedItems(): TimelineItem[] {
+  const s = editorState();
+  const ids = new Set(s.selectedIds);
+  return s.project.items.filter((it) => ids.has(it.id));
 }
 
 /** 選択中のアイテム（選択が無ければ再生位置にあるすべてのアイテム）を再生位置で分割する */
 export function splitAtPlayhead(): void {
   const s = editorState();
   const t = s.currentTime;
-  const selected = s.project.items.find((it) => it.id === s.selectedItemId && t > it.start && t < itemEnd(it));
-  const victims = selected ? [selected] : s.project.items.filter((it) => t > it.start && t < itemEnd(it));
+  const under = s.project.items.filter((it) => t > it.start && t < itemEnd(it) && !s.project.layers?.[it.layer]?.locked);
+  const selected = under.filter((it) => s.selectedIds.includes(it.id));
+  const victims = selected.length ? selected : under;
   if (!victims.length) {
     s.toast('再生位置（赤い線）をアイテムの上に合わせてから分割してください');
     return;
@@ -150,46 +168,123 @@ export function splitAtPlayhead(): void {
   });
 }
 
-export function duplicateItem(id: string): void {
+/**
+ * アイテムのまとまりを、位置関係を保ったまま shift 秒ずらして置く。
+ * 同じレイヤーが空いていなければ、空いているレイヤーに置く。
+ */
+function placeCopies(sources: TimelineItem[], shift: number): string[] {
   const s = editorState();
-  const item = s.project.items.find((it) => it.id === id);
-  if (!item) return;
-  const start = itemEnd(item);
-  const copy = { ...structuredClone(item), id: uid(), start } as TimelineItem;
-  copy.layer = findFreeLayer(s.project.items, start, start + item.duration, item.layer);
+  const placed: TimelineItem[] = [];
+  const all = [...s.project.items];
+  for (const src of [...sources].sort((a, b) => a.layer - b.layer || a.start - b.start)) {
+    const start = Math.max(0, src.start + shift);
+    const copy = { ...structuredClone(src), id: uid(), start } as TimelineItem;
+    copy.layer = findFreeLayer(all, start, start + src.duration, src.layer);
+    // 字幕つきの読み上げを複製したとき、元の字幕を書き換えないようにする
+    if (copy.kind === 'audio' && copy.tts) copy.tts = { ...copy.tts, subtitleId: null };
+    all.push(copy);
+    placed.push(copy);
+  }
   s.edit((d) => {
-    d.items.push(copy);
+    d.items.push(...placed);
   });
-  s.selectItem(copy.id);
+  const ids = placed.map((it) => it.id);
+  s.setSelection(ids);
+  return ids;
+}
+
+export function duplicateItem(id: string): void {
+  duplicateItems([id]);
+}
+
+/** 選んだアイテムを、そのすぐ後ろに複製する */
+export function duplicateItems(ids: string[]): void {
+  const s = editorState();
+  const set = new Set(ids);
+  const sources = s.project.items.filter((it) => set.has(it.id));
+  if (!sources.length) return;
+  const first = Math.min(...sources.map((it) => it.start));
+  const last = Math.max(...sources.map(itemEnd));
+  placeCopies(sources, last - first);
+}
+
+export function copyItem(id: string): void {
+  copyItems([id]);
 }
 
 /** 選んだアイテムをコピーする */
-export function copyItem(id: string): void {
+export function copyItems(ids: string[]): void {
   const s = editorState();
-  const item = s.project.items.find((it) => it.id === id);
-  if (!item) return;
-  s.setClipboard({ projectId: s.project.id, item: structuredClone(item) });
-  s.toast('コピーしました（「ペースト」で再生位置に貼り付け）');
+  const set = new Set(ids);
+  const items = s.project.items.filter((it) => set.has(it.id));
+  if (!items.length) return;
+  s.setClipboard({ projectId: s.project.id, items: structuredClone(items) });
+  s.toast(items.length > 1 ? `${items.length}個コピーしました（「ペースト」で再生位置に貼り付け）` : 'コピーしました（「ペースト」で再生位置に貼り付け）');
 }
 
-/** コピーしたアイテムを再生位置に貼り付ける。同じレイヤーが空いていなければ空いているレイヤーに置く */
-export function pasteItem(): void {
+/**
+ * コピーしたアイテムを貼り付ける（at を省くと再生位置）。
+ * layer を指定すると、一番上のアイテムがそのレイヤーに来るように置く。
+ */
+export function pasteItem(at?: number, layer?: number): void {
   const s = editorState();
   const clip = s.clipboard;
-  if (!clip) return;
-  const src = clip.item;
+  if (!clip?.items.length) return;
   // 素材を使うアイテムは、その素材があるプロジェクトの中でだけ貼り付けられる
-  if ('assetId' in src && !s.project.assets[src.assetId]) {
+  const usable = clip.items.filter((it) => !('assetId' in it) || s.project.assets[it.assetId]);
+  if (!usable.length) {
     s.toast('この素材は今のプロジェクトに無いため貼り付けられません', 'error');
     return;
   }
-  const start = s.currentTime;
-  const copy = { ...structuredClone(src), id: uid(), start } as TimelineItem;
-  copy.layer = findFreeLayer(s.project.items, start, start + src.duration, src.layer);
-  s.edit((d) => {
-    d.items.push(copy);
+  const first = Math.min(...usable.map((it) => it.start));
+  const top = Math.min(...usable.map((it) => it.layer));
+  const moved = layer === undefined ? usable : usable.map((it) => ({ ...it, layer: it.layer - top + layer }) as TimelineItem);
+  placeCopies(moved, (at ?? s.currentTime) - first);
+}
+
+// ---------- レイヤー ----------
+
+export function setLayerState(layer: number, patch: Partial<LayerState>): void {
+  editorState().edit((d) => {
+    const layers = (d.layers ??= {});
+    const next = { ...layers[layer], ...patch };
+    for (const k of Object.keys(next) as (keyof LayerState)[]) if (!next[k]) delete next[k];
+    if (Object.keys(next).length) layers[layer] = next;
+    else delete layers[layer];
   });
-  s.selectItem(copy.id);
+}
+
+/** レイヤー番号を付け替える（アイテムと、レイヤーの表示・ロック・名前の両方） */
+function remapLayers(map: (layer: number) => number | null): void {
+  editorState().edit((d) => {
+    d.items = d.items.filter((it) => map(it.layer) !== null);
+    for (const it of d.items) it.layer = map(it.layer)!;
+    const next: Record<string, LayerState> = {};
+    for (const [k, v] of Object.entries(d.layers ?? {})) {
+      const to = map(Number(k));
+      if (to !== null) next[to] = v;
+    }
+    d.layers = next;
+  });
+}
+
+/** at の位置に空のレイヤーを入れる（それ以降は1つずつ下がる） */
+export function insertLayer(at: number): void {
+  remapLayers((l) => (l >= at ? l + 1 : l));
+}
+
+/** レイヤーを、置いてあるアイテムごと削除する（それ以降は1つずつ上がる） */
+export function removeLayer(at: number): void {
+  const s = editorState();
+  remapLayers((l) => (l === at ? null : l > at ? l - 1 : l));
+  const alive = new Set(editorState().project.items.map((it) => it.id));
+  s.setSelection(s.selectedIds.filter((id) => alive.has(id)));
+}
+
+/** レイヤーを、となりのレイヤーと入れ替える */
+export function swapLayers(a: number, b: number): void {
+  if (a < 0 || b < 0 || a === b) return;
+  remapLayers((l) => (l === a ? b : l === b ? a : l));
 }
 
 // ---------- プロジェクト ----------

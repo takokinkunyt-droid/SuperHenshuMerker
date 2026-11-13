@@ -29,18 +29,43 @@ async function canWriteOpfs(): Promise<boolean> {
 
 const blobKey = (projectId: string, assetId: string) => `${projectId}/${assetId}`;
 
-export async function putAsset(projectId: string, assetId: string, blob: Blob): Promise<void> {
-  if (await canWriteOpfs()) {
-    const dir = await opfsProjectDir(projectId, true);
-    if (dir) {
-      const handle = await dir.getFileHandle(assetId, { create: true });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
+/** 大きなファイルを保存するときの1回分の大きさ（進み具合を出すために分けて書く） */
+const WRITE_CHUNK = 32 * 1024 * 1024;
+
+/**
+ * 素材を保存する。大きなファイルは少しずつ書き込み、進み具合（0〜1）を onProgress に知らせる。
+ * 空き容量が足りないときは、わかりやすい説明つきのエラーにする。
+ */
+export async function putAsset(projectId: string, assetId: string, blob: Blob, onProgress?: (ratio: number) => void): Promise<void> {
+  try {
+    if (await canWriteOpfs()) {
+      const dir = await opfsProjectDir(projectId, true);
+      if (dir) {
+        const handle = await dir.getFileHandle(assetId, { create: true });
+        const writable = await handle.createWritable();
+        try {
+          for (let offset = 0; offset < blob.size || offset === 0; offset += WRITE_CHUNK) {
+            await writable.write(blob.slice(offset, offset + WRITE_CHUNK));
+            onProgress?.(Math.min(1, (offset + WRITE_CHUNK) / Math.max(1, blob.size)));
+          }
+          await writable.close();
+        } catch (err) {
+          await writable.abort().catch(() => undefined);
+          await dir.removeEntry(assetId).catch(() => undefined);
+          throw err;
+        }
+        return;
+      }
     }
+    await idbPut(STORE_BLOBS, blob, blobKey(projectId, assetId));
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+      const est = await navigator.storage?.estimate?.().catch(() => null);
+      const free = est?.quota && est.usage !== undefined ? `（残り約${((est.quota - est.usage) / 1e9).toFixed(1)}GB、ファイルは${(blob.size / 1e9).toFixed(1)}GB）` : '';
+      throw new Error(`ブラウザの保存領域がいっぱいで、このファイルを取り込めません${free}。使っていないプロジェクトを「📁」から削除するか、パソコンの空き容量を増やしてください。`);
+    }
+    throw err;
   }
-  await idbPut(STORE_BLOBS, blob, blobKey(projectId, assetId));
 }
 
 export async function getAsset(projectId: string, assetId: string): Promise<Blob | null> {

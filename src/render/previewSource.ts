@@ -7,7 +7,7 @@ import type { Drawable, FrameSource } from './renderer';
 export const previewSource: FrameSource = {
   image(assetId) {
     const img = media.image(assetId);
-    return img ? { source: img, width: img.width, height: img.height } : null;
+    return img;
   },
   videoFrame(item: VideoItem) {
     const v = media.video(item.assetId);

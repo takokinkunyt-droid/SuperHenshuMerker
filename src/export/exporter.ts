@@ -20,7 +20,7 @@ import {
 } from 'mediabunny';
 import type { Project, VideoItem } from '../types';
 import { MIX_SAMPLE_RATE, media } from '../media/mediaCache';
-import { scheduleAudio } from '../media/audioMix';
+import { AudioMixer } from '../media/audioMix';
 import { ensureProjectFonts } from '../media/fontLoader';
 import { isActiveAt, itemEnd, projectDuration } from '../state/timeline';
 import { drawFrame, type Drawable, type FrameSource } from '../render/renderer';
@@ -73,6 +73,9 @@ export interface ExportResult {
   seconds: number;
 }
 
+/** 長い動画の音声を区切ってミックスするときの1区間の長さ */
+const AUDIO_BLOCK_SEC = 60;
+
 let aacRegistered = false;
 
 async function prepareAudioCodec(support: ExportSupport): Promise<AudioCodec | null> {
@@ -117,12 +120,11 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
   await ensureProjectFonts(project);
   checkAbort();
 
-  // 1. 全音声を1本にミックスする
-  progress(0, '音声をミックス中…');
+  // 1. 音声のミックスは、長い動画でもメモリを使い切らないように区切って行う（5分以内なら1回で済ませる）
   const totalSamples = Math.ceil(duration * MIX_SAMPLE_RATE);
-  const offline = new OfflineAudioContext(2, Math.max(1, totalSamples), MIX_SAMPLE_RATE);
-  scheduleAudio(offline, project, 0, 0);
-  const mixed = await offline.startRendering();
+  const mixer = new AudioMixer(project, duration, duration <= 300 ? duration : AUDIO_BLOCK_SEC);
+  progress(0, '音声をミックス中…');
+  await mixer.read(0, 1);
   checkAbort();
 
   // 2. 出力ファイルを準備する
@@ -147,8 +149,7 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
   const frameDrawables = new Map<string, Drawable | null>();
   const source: FrameSource = {
     image(assetId) {
-      const img = media.image(assetId);
-      return img ? { source: img, width: img.width, height: img.height } : null;
+      return media.image(assetId);
     },
     videoFrame(item) {
       return frameDrawables.get(item.id) ?? null;
@@ -159,6 +160,12 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
     await output.start();
     const frameCount = Math.ceil(duration * fps);
     let audioWritten = 0;
+    /** ミックス済みの音声を until（サンプル数）まで出力に渡す */
+    const writeAudio = async (until: number) => {
+      if (!audioSource || until <= audioWritten) return;
+      for (const part of await mixer.read(audioWritten, until)) await audioSource.add(part);
+      audioWritten = until;
+    };
     for (let i = 0; i < frameCount; i++) {
       checkAbort();
       const t = i / fps;
@@ -172,14 +179,11 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
       // 音声は映像と交互に1秒ずつ渡す（片方だけが溜まり続けないように）
       if (audioSource) {
         const until = Math.min(totalSamples, Math.ceil(((i + 1) / fps + 1) * MIX_SAMPLE_RATE));
-        if (until - audioWritten >= MIX_SAMPLE_RATE || i === frameCount - 1) {
-          await audioSource.add(sliceBuffer(mixed, audioWritten, until));
-          audioWritten = until;
-        }
+        if (until - audioWritten >= MIX_SAMPLE_RATE || i === frameCount - 1) await writeAudio(until);
       }
       if (i % 5 === 0) progress(i / frameCount, `フレーム ${i + 1} / ${frameCount}`);
     }
-    if (audioSource && audioWritten < totalSamples) await audioSource.add(sliceBuffer(mixed, audioWritten, totalSamples));
+    if (audioSource && audioWritten < totalSamples) await writeAudio(totalSamples);
 
     progress(1, 'ファイルを仕上げ中…');
     await output.finalize();
@@ -196,15 +200,6 @@ export async function exportVideo(project: Project, opts: ExportOptions): Promis
       ? new Blob([target.buffer], { type: support.container === 'mp4' ? 'video/mp4' : 'video/webm' })
       : null;
   return { blob, extension, seconds: (performance.now() - began) / 1000 };
-}
-
-function sliceBuffer(buffer: AudioBuffer, from: number, to: number): AudioBuffer {
-  const length = Math.max(1, to - from);
-  const out = new AudioBuffer({ length, numberOfChannels: buffer.numberOfChannels, sampleRate: buffer.sampleRate });
-  for (let c = 0; c < buffer.numberOfChannels; c++) {
-    out.copyToChannel(buffer.getChannelData(c).subarray(from, from + length), c);
-  }
-  return out;
 }
 
 /** 動画アイテムのフレームを、書き出しの時刻順にまとめてデコードする */

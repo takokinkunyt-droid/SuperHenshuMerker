@@ -72,34 +72,36 @@ export interface TtsInfo extends VoiceSettings {
   subtitleId?: string | null;
 }
 
-export type SlideDirection = 'left' | 'right' | 'top' | 'bottom';
-
-/** 映像エフェクト（画像・動画・テキスト）。未設定の項目は「なし」 */
-export interface VisualEffects {
-  /** ぼかしの強さ（画面上のピクセル、0でなし） */
-  blur?: number;
-  /** モザイクの1マスの大きさ（ピクセル、0でなし） */
-  mosaic?: number;
-  /** フェードイン・アウトの秒数 */
-  fadeIn?: number;
-  fadeOut?: number;
-  /** 画面外からスライドして入ってくる */
-  slideIn?: { direction: SlideDirection; duration: number } | null;
-  /** 拡大縮小しながら入ってくる（from 倍の大きさから 1 倍へ） */
-  zoomIn?: { from: number; duration: number } | null;
+/** 数値の項目を、アイテムの始まりから終わりにかけて a → b に変化させる */
+export interface AnimValue {
+  a: number;
+  b: number;
+  /** 変化のしかた（直線・加速・減速など）。未設定は直線 */
+  ease?: string;
 }
 
-/** 音声エフェクト（音楽・動画の音声） */
-export interface AudioEffects {
-  /** 低音強化（dB、0でなし） */
-  bass?: number;
-  /** 元の音の代わりにピー音を鳴らす */
-  beep?: boolean;
-  /** ザーッというノイズを混ぜる量（0〜1） */
-  noise?: number;
-  /** 音量のフェードイン・アウトの秒数 */
-  fadeIn?: number;
-  fadeOut?: number;
+export type FxValue = number | string | boolean | AnimValue;
+
+/**
+ * アイテムに積むエフェクト1つ分。種類（type）ごとの定義は src/fx にある。
+ * 並び順のとおりに上から適用される。
+ */
+export interface Fx {
+  id: string;
+  type: string;
+  /** true で一時的に無効 */
+  off?: boolean;
+  /** 設定値（既定値のままの項目は保存しない） */
+  p: Record<string, FxValue>;
+}
+
+/** レイヤーごとの状態 */
+export interface LayerState {
+  /** 非表示（映像は描かず、音も鳴らさない） */
+  hidden?: boolean;
+  /** ロック（選択・移動できない） */
+  locked?: boolean;
+  name?: string;
 }
 
 interface ItemBase {
@@ -124,13 +126,14 @@ export interface TextItem extends ItemBase {
   style: TextStyle;
   /** 回転（度、時計回り） */
   rotation?: number;
-  effects?: VisualEffects;
+  /** 映像エフェクト */
+  fx?: Fx[];
 }
 
 export interface ImageItem extends ItemBase, Placement {
   kind: 'image';
   assetId: string;
-  effects?: VisualEffects;
+  fx?: Fx[];
 }
 
 export interface VideoItem extends ItemBase, Placement {
@@ -138,8 +141,9 @@ export interface VideoItem extends ItemBase, Placement {
   assetId: string;
   sourceOffset: number;
   volume: number;
-  effects?: VisualEffects;
-  audioEffects?: AudioEffects;
+  fx?: Fx[];
+  /** 音声エフェクト */
+  afx?: Fx[];
 }
 
 export interface AudioItem extends ItemBase {
@@ -147,7 +151,7 @@ export interface AudioItem extends ItemBase {
   assetId: string;
   sourceOffset: number;
   volume: number;
-  audioEffects?: AudioEffects;
+  afx?: Fx[];
   /** 合成音声で作った音声なら、その読み上げ内容 */
   tts?: TtsInfo;
 }
@@ -165,6 +169,8 @@ export interface Project {
   backgroundColor: string;
   items: TimelineItem[];
   assets: Record<string, AssetMeta>;
+  /** レイヤーの表示・ロック・名前（キーはレイヤー番号） */
+  layers?: Record<string, LayerState>;
   createdAt: number;
   updatedAt: number;
 }

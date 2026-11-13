@@ -1,6 +1,6 @@
 // 上のバーの編集ボタン（複製・コピー・ペースト・戻す・やり直す）。
 import { editorState, useEditor } from '../state/store';
-import { copyItem, duplicateItem, pasteItem } from '../state/actions';
+import { copyItems, duplicateItems, pasteItem } from '../state/actions';
 
 const ICONS = {
   duplicate: (
@@ -39,15 +39,15 @@ function ActionButton({ icon, label, title, disabled, onClick }: { icon: keyof t
 }
 
 export function EditActions() {
-  const selectedId = useEditor((s) => s.selectedItemId);
+  const ids = useEditor((s) => s.selectedIds);
   const canPaste = useEditor((s) => !!s.clipboard);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   return (
     <div className="edit-actions" role="toolbar" aria-label="編集">
-      <ActionButton icon="duplicate" label="複製" title="選んだアイテムを複製 (Ctrl+D)" disabled={!selectedId} onClick={() => selectedId && duplicateItem(selectedId)} />
-      <ActionButton icon="copy" label="コピー" title="選んだアイテムをコピー (Ctrl+C)" disabled={!selectedId} onClick={() => selectedId && copyItem(selectedId)} />
-      <ActionButton icon="paste" label="ペースト" title="再生位置に貼り付け (Ctrl+V)" disabled={!canPaste} onClick={pasteItem} />
+      <ActionButton icon="duplicate" label="複製" title="選んだアイテムを複製 (Ctrl+D)" disabled={!ids.length} onClick={() => duplicateItems(ids)} />
+      <ActionButton icon="copy" label="コピー" title="選んだアイテムをコピー (Ctrl+C)" disabled={!ids.length} onClick={() => copyItems(ids)} />
+      <ActionButton icon="paste" label="ペースト" title="再生位置に貼り付け (Ctrl+V)" disabled={!canPaste} onClick={() => pasteItem()} />
       <ActionButton icon="undo" label="戻す" title="元に戻す (Ctrl+Z)" disabled={!canUndo} onClick={() => editorState().undo()} />
       <ActionButton icon="redo" label="やり直す" title="やり直す (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => editorState().redo()} />
     </div>

@@ -43,6 +43,34 @@ export function overlaps(items: TimelineItem[], layer: number, start: number, en
   return items.some((it) => it.id !== ignoreId && it.layer === layer && it.start < end && itemEnd(it) > start);
 }
 
+/**
+ * アイテムのまとまりを layerShift だけ上下にずらして置けるか（ほかのアイテムと重ならず、ロックされたレイヤーにも乗らないか）。
+ * moving はすでに新しい開始位置になっているもの。
+ */
+export function canPlace(items: TimelineItem[], moving: TimelineItem[], layerShift: number, locked: (layer: number) => boolean): boolean {
+  const ids = new Set(moving.map((m) => m.id));
+  const rest = items.filter((it) => !ids.has(it.id));
+  for (const m of moving) {
+    const layer = m.layer + layerShift;
+    if (layer < 0 || locked(layer)) return false;
+    if (rest.some((it) => it.layer === layer && it.start < m.start + m.duration - 1e-6 && itemEnd(it) > m.start + 1e-6)) return false;
+  }
+  return true;
+}
+
+/**
+ * 置きたいレイヤーのずれ（want）に一番近い、重ならずに置けるずれを探す。
+ * 上下に1つずつ広げて探し、見つからなければ null。
+ */
+export function nearestLayerShift(items: TimelineItem[], moving: TimelineItem[], want: number, locked: (layer: number) => boolean, range = 40): number | null {
+  for (let d = 0; d <= range; d++) {
+    for (const shift of d === 0 ? [want] : [want + d, want - d]) {
+      if (canPlace(items, moving, shift, locked)) return shift;
+    }
+  }
+  return null;
+}
+
 /** preferredから順に、指定区間が空いているレイヤーを探す */
 export function findFreeLayer(items: TimelineItem[], start: number, end: number, preferred: number): number {
   for (let layer = preferred; layer < preferred + 100; layer++) {

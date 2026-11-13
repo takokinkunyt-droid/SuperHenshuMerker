@@ -1,13 +1,17 @@
 // プレビュー再生。音声をWeb Audioで鳴らし、その時計を基準に再生位置を進める。
 import { editorState } from '../state/store';
 import { projectDuration } from '../state/timeline';
-import { scheduleAudio } from './audioMix';
+import { pumpFeeds, scheduleAudio, stopScheduled, type Scheduled } from './audioMix';
+import { ensureWorklets } from '../fx/audio';
 import { media } from './mediaCache';
 import { keepAudioAudible, releaseAudio } from './audioUnlock';
 
 class Playback {
   private ctx: AudioContext | null = null;
-  private nodes: AudioScheduledSourceNode[] = [];
+  private sched: Scheduled | null = null;
+  private pumpTimer = 0;
+  /** 再生を始めるたびに増やす番号（古い再生の読み込み結果を捨てるため） */
+  private session = 0;
   private startCtxTime = 0;
   private startTime = 0;
   private raf = 0;
@@ -34,11 +38,23 @@ class Playback {
     this.ctx ??= new AudioContext();
     await this.ctx.resume();
     // 読み込みに時間のかかる素材があっても再生は始める（読み込めたものから鳴る）
-    await Promise.race([media.ensureAll(Object.values(s.project.assets)), new Promise((r) => setTimeout(r, 3000))]);
+    await Promise.race([Promise.all([media.ensureAll(Object.values(s.project.assets)), ensureWorklets(this.ctx)]), new Promise((r) => setTimeout(r, 3000))]);
+    // 待っている間に止められたり、もう一度押されたりしたら何もしない
+    if (editorState().playing) return;
+    const session = ++this.session;
+
+    // 長い素材は、最初に鳴る部分を先に読んでおく（頭が欠けないように）
+    const probe = scheduleAudio(this.ctx, s.project, from, this.ctx.currentTime + 1);
+    const first = pumpFeeds(probe, () => undefined, this.ctx.currentTime + 1.5);
+    stopScheduled(probe);
+    await Promise.race([Promise.all(first.map((c) => media.stream(c.assetId)?.load(c.idx))), new Promise((r) => setTimeout(r, 4000))]);
+    if (session !== this.session || editorState().playing) return;
 
     this.startTime = from;
     this.startCtxTime = this.ctx.currentTime + 0.05;
-    this.nodes = scheduleAudio(this.ctx, s.project, from, this.startCtxTime);
+    this.sched = scheduleAudio(this.ctx, s.project, from, this.startCtxTime);
+    this.pump(session);
+    this.pumpTimer = window.setInterval(() => this.pump(session), 500);
     s.setTime(from);
     s.setPlaying(true);
 
@@ -56,18 +72,26 @@ class Playback {
     this.raf = requestAnimationFrame(tick);
   }
 
+  /** 長い素材の、これから8秒以内に鳴る部分をつなぐ。読み込めていない部分は読み込んでからつなぐ */
+  private pump(session: number) {
+    if (session !== this.session || !this.sched || !this.ctx) return;
+    const missing = pumpFeeds(this.sched, (id, idx) => media.stream(id)?.cached(idx), this.ctx.currentTime + 8);
+    for (const c of missing) {
+      void media
+        .stream(c.assetId)
+        ?.load(c.idx)
+        .then(() => this.pump(session));
+    }
+  }
+
   pause() {
     cancelAnimationFrame(this.raf);
+    clearInterval(this.pumpTimer);
+    this.session++;
     releaseAudio();
     const t = this.now();
-    for (const n of this.nodes) {
-      try {
-        n.stop();
-      } catch {
-        // 開始前のノードは止める必要がない
-      }
-    }
-    this.nodes = [];
+    stopScheduled(this.sched);
+    this.sched = null;
     const s = editorState();
     s.setPlaying(false);
     s.setTime(t);

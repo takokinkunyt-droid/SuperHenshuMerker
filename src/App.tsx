@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { editorState, useEditor } from './state/store';
 import { useSaveStatus } from './persist/session';
-import { copyItem, deleteItem, duplicateItem, importAndPlace, pasteItem, splitAtPlayhead } from './state/actions';
+import { copyItems, deleteItems, duplicateItems, importAndPlace, pasteItem, splitAtPlayhead } from './state/actions';
+import { projectDuration } from './state/timeline';
 import { playback } from './media/playback';
 import { MediaPanel } from './ui/MediaPanel';
 import { MobileNav } from './ui/MobileNav';
@@ -43,11 +44,14 @@ function useShortcuts(enabled: boolean) {
         s.redo();
       } else if (mod && key === 'd') {
         e.preventDefault();
-        if (s.selectedItemId) duplicateItem(s.selectedItemId);
+        duplicateItems(s.selectedIds);
+      } else if (mod && key === 'a') {
+        e.preventDefault();
+        s.setSelection(s.project.items.filter((it) => !s.project.layers?.[it.layer]?.locked).map((it) => it.id));
       } else if (mod && key === 'c') {
-        if (s.selectedItemId) {
+        if (s.selectedIds.length) {
           e.preventDefault();
-          copyItem(s.selectedItemId);
+          copyItems(s.selectedIds);
         }
       } else if (mod && key === 'v') {
         if (s.clipboard) {
@@ -61,15 +65,17 @@ function useShortcuts(enabled: boolean) {
         playback.toggle();
       } else if (key === 's') {
         splitAtPlayhead();
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedItemId) {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedIds.length) {
         e.preventDefault();
-        deleteItem(s.selectedItemId);
+        deleteItems(s.selectedIds);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         const step = e.shiftKey ? 1 : 1 / s.project.fps;
         playback.seek(Math.max(0, s.currentTime + (e.key === 'ArrowLeft' ? -step : step)));
       } else if (e.key === 'Home') {
         playback.seek(0);
+      } else if (e.key === 'End') {
+        playback.seek(projectDuration(s.project));
       } else if (e.key === 'Escape') {
         s.selectItem(null);
       }

@@ -1,33 +1,84 @@
 import { describe, expect, it } from 'vitest';
-import { effectState, slideOffset, snapBox, snapLines, textBox } from '../src/render/effects';
-import { fadeEnvelope } from '../src/media/audioMix';
+import { slideOffset, snapBox, snapLines, textBox } from '../src/render/effects';
+import { computeFx, fxMatrix, transformedBounds } from '../src/render/itemFx';
+import { VISUAL_FX, type FxCtx } from '../src/fx/visual';
+import { AUDIO_FX, fadeEnvelope } from '../src/fx/audio';
+import { migrateProject } from '../src/persist/migrate';
+import type { Fx } from '../src/types';
 import { defaultTextStyle } from '../src/state/defaults';
 
 const project = { width: 1920, height: 1080 };
 const box = { x: 860, y: 440, w: 200, h: 200 };
 
+const ctxAt = (local: number, dur = 10): FxCtx => ({ local, dur, box, W: project.width, H: project.height, seed: 0.3 });
+const fx = (type: string, p: Fx['p'] = {}, extra: Partial<Fx> = {}): Fx => ({ id: type, type, p, ...extra });
+
 describe('visual effects', () => {
   it('fades in and out', () => {
-    const fx = { fadeIn: 1, fadeOut: 2 };
-    expect(effectState(fx, 0, 10, box, project).alpha).toBe(0);
-    expect(effectState(fx, 0.5, 10, box, project).alpha).toBeCloseTo(0.5);
-    expect(effectState(fx, 5, 10, box, project).alpha).toBe(1);
-    expect(effectState(fx, 9, 10, box, project).alpha).toBeCloseTo(0.5);
+    const list = [fx('fadeInOut', { tin: 1, tout: 2, ease: 'linear' })];
+    expect(computeFx(list, ctxAt(0), false).st.alpha).toBe(0);
+    expect(computeFx(list, ctxAt(0.5), false).st.alpha).toBeCloseTo(0.5);
+    expect(computeFx(list, ctxAt(5), false).st.alpha).toBe(1);
+    expect(computeFx(list, ctxAt(9), false).st.alpha).toBeCloseTo(0.5);
   });
 
   it('slides in from fully off-screen and ends in place', () => {
-    const fx = { slideIn: { direction: 'left' as const, duration: 1 } };
-    const start = effectState(fx, 0, 5, box, project);
+    const list = [fx('offscreenInOut', { dir: 'left', tin: 1, tout: 0 })];
+    const start = computeFx(list, ctxAt(0, 5), false).st;
     expect(box.x + box.w + start.dx).toBe(0); // 右端がちょうど画面の左端
-    expect(effectState(fx, 1, 5, box, project).dx).toBeCloseTo(0);
+    expect(computeFx(list, ctxAt(1, 5), false).st.dx).toBeCloseTo(0);
     expect(slideOffset('bottom', box, project)).toEqual({ dx: 0, dy: 1080 - 440 });
     expect(slideOffset('top', box, project)).toEqual({ dx: 0, dy: -640 });
   });
 
-  it('zooms from the given scale to 1', () => {
-    const fx = { zoomIn: { from: 0.2, duration: 1 } };
-    expect(effectState(fx, 0, 5, box, project).zoom).toBeCloseTo(0.2);
-    expect(effectState(fx, 2, 5, box, project).zoom).toBe(1);
+  it('stacks effects, skips disabled ones, and animates a value across the item', () => {
+    const list = [fx('zoom', { all: { a: 100, b: 200 } }), fx('rot', { angle: 90 }), fx('opacity', { v: 50 }, { off: true })];
+    const st = computeFx(list, ctxAt(5), false).st;
+    expect(st.sx).toBeCloseTo(1.5);
+    expect(st.rot).toBe(90);
+    expect(st.alpha).toBe(1);
+  });
+
+  it('collects picture effects in order and drops the ones with nothing to do', () => {
+    const list = [fx('blur', { r: 0 }), fx('mosaic'), fx('blurInOut', { tin: 1, tout: 0 }), fx('shuffleInOut')];
+    expect(computeFx(list, ctxAt(5), false).steps.map((s) => s.def.type)).toEqual(['mosaic']);
+    expect(computeFx(list, ctxAt(0.2), false).steps.map((s) => s.def.type)).toEqual(['mosaic', 'blurInOut']);
+    expect(computeFx(list, ctxAt(0.2), true).st.shuffle).toBeGreaterThan(0);
+  });
+
+  it('builds a matrix that rotates and scales around the box center', () => {
+    const st = computeFx([fx('rot', { angle: 90 }), fx('zoom', { all: 200 })], ctxAt(1), false).st;
+    const m = fxMatrix(st, box, 0);
+    const b = transformedBounds(m, box);
+    expect(b.x + b.w / 2).toBeCloseTo(960);
+    expect(b.y + b.h / 2).toBeCloseTo(540);
+    expect(b.w).toBeCloseTo(400);
+  });
+
+  it('has unique effect types and valid defaults', () => {
+    const types = [...VISUAL_FX.map((d) => d.type)];
+    expect(new Set(types).size).toBe(types.length);
+    const audio = AUDIO_FX.map((d) => d.type);
+    expect(new Set(audio).size).toBe(audio.length);
+    for (const d of [...VISUAL_FX, ...AUDIO_FX]) {
+      for (const p of d.params) {
+        if (p.t === 'num') expect(p.def >= p.min && p.def <= p.max, `${d.name} ${p.label}`).toBe(true);
+        if (p.t === 'sel') expect(p.opts.some((o) => o[0] === p.def), `${d.name} ${p.label}`).toBe(true);
+      }
+    }
+  });
+
+  it('converts old fixed effect settings into effect lists', () => {
+    const old = { version: 2, items: [
+      { kind: 'image', id: 'a', layer: 0, start: 0, duration: 5, assetId: 'x', x: 0, y: 0, scale: 1, opacity: 1, effects: { blur: 8, fadeIn: 1, slideIn: { direction: 'top', duration: 0.6 } } },
+      { kind: 'audio', id: 'b', layer: 1, start: 0, duration: 5, assetId: 'y', sourceOffset: 0, volume: 1, audioEffects: { beep: true, bass: 6 } },
+    ] };
+    const p = migrateProject(old);
+    const img = p.items[0] as { fx?: Fx[]; effects?: unknown };
+    expect(img.effects).toBeUndefined();
+    expect(img.fx?.map((f) => f.type)).toEqual(['fadeInOut', 'offscreenInOut', 'blur']);
+    expect((p.items[1] as { afx?: Fx[] }).afx?.map((f) => f.type)).toEqual(['tone', 'bass']);
+    expect(migrateProject(p).items).toEqual(p.items); // もう一度かけても変わらない
   });
 });
 
@@ -57,12 +108,11 @@ describe('snapping', () => {
 
 describe('audio fade envelope', () => {
   it('ramps volume at both ends', () => {
-    const fx = { fadeIn: 2, fadeOut: 1 };
-    expect(fadeEnvelope(fx, 0, 10)).toBe(0);
-    expect(fadeEnvelope(fx, 1, 10)).toBeCloseTo(0.5);
-    expect(fadeEnvelope(fx, 5, 10)).toBe(1);
-    expect(fadeEnvelope(fx, 9.5, 10)).toBeCloseTo(0.5);
-    expect(fadeEnvelope(undefined, 3, 10)).toBe(1);
+    expect(fadeEnvelope(2, 1, 0, 10)).toBe(0);
+    expect(fadeEnvelope(2, 1, 1, 10)).toBeCloseTo(0.5);
+    expect(fadeEnvelope(2, 1, 5, 10)).toBe(1);
+    expect(fadeEnvelope(2, 1, 9.5, 10)).toBeCloseTo(0.5);
+    expect(fadeEnvelope(0, 0, 3, 10)).toBe(1);
   });
 });
 

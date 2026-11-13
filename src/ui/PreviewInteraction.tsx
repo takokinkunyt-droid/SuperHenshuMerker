@@ -52,7 +52,7 @@ function applyTransform(base: TimelineItem, box: Box | null, t: Transform) {
 
 /** その位置にある一番手前のアイテム */
 function hitTest(project: Project, t: number, p: Point, pad: number): TimelineItem | null {
-  const items = visibleItems(project, t);
+  const items = visibleItems(project, t).filter((it) => !project.layers?.[it.layer]?.locked);
   for (let i = items.length - 1; i >= 0; i--) {
     const box = itemBaseBox(items[i], project);
     if (box && hitBox(box, itemRotation(items[i]), p, pad)) return items[i];

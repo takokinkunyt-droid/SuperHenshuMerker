@@ -19,7 +19,10 @@ interface EditorState {
   /** ドラッグ中など、まとめて1回のUndoにしたい操作の開始時点 */
   gestureBase: Project | null;
 
+  /** 選択中のアイテム（複数選択のときは最後に選んだもの。設定パネルに出す） */
   selectedItemId: string | null;
+  /** 選択中のすべてのアイテム */
+  selectedIds: string[];
   /** プレビュー上で文字を編集中のテキストアイテム */
   editingTextId: string | null;
   /** スマホで下から出すパネル */
@@ -27,7 +30,7 @@ interface EditorState {
   /** 合成音声（読み上げ）のパネルを開いているか */
   ttsOpen: boolean;
   /** コピーしたアイテム（同じプロジェクトの中で貼り付けに使う） */
-  clipboard: { projectId: string; item: TimelineItem } | null;
+  clipboard: { projectId: string; items: TimelineItem[] } | null;
   currentTime: number;
   playing: boolean;
   pxPerSec: number;
@@ -51,10 +54,14 @@ interface EditorState {
   loadProject: (project: Project) => void;
 
   selectItem: (id: string | null) => void;
+  /** 複数のアイテムを選ぶ（primary を省くと最後のもの） */
+  setSelection: (ids: string[], primary?: string | null) => void;
+  /** 選択に足す／選択から外す（Ctrl・Shift を押しながらのクリック） */
+  toggleSelect: (id: string) => void;
   setEditingText: (id: string | null) => void;
   setSheet: (sheet: 'media' | 'edit' | null) => void;
   setTtsOpen: (open: boolean) => void;
-  setClipboard: (clip: { projectId: string; item: TimelineItem } | null) => void;
+  setClipboard: (clip: { projectId: string; items: TimelineItem[] } | null) => void;
   setTime: (t: number) => void;
   setPlaying: (playing: boolean) => void;
   setPxPerSec: (v: number) => void;
@@ -76,6 +83,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   future: [],
   gestureBase: null,
   selectedItemId: null,
+  selectedIds: [],
   editingTextId: null,
   sheet: null,
   ttsOpen: false,
@@ -161,14 +169,25 @@ export const useEditor = create<EditorState>()((set, get) => ({
       future: [],
       gestureBase: null,
       selectedItemId: null,
+      selectedIds: [],
       editingTextId: null,
       sheet: null,
       currentTime: 0,
       playing: false,
     }),
 
-  selectItem: (id) => set((s) => ({ selectedItemId: id, editingTextId: s.editingTextId === id ? id : null })),
-  setEditingText: (id) => set({ editingTextId: id, ...(id ? { selectedItemId: id } : {}) }),
+  selectItem: (id) => set((s) => ({ selectedItemId: id, selectedIds: id ? [id] : [], editingTextId: s.editingTextId === id ? id : null })),
+  setSelection: (ids, primary) =>
+    set((s) => {
+      const main = primary !== undefined && primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] ?? null;
+      return { selectedIds: ids, selectedItemId: main, editingTextId: s.editingTextId === main ? main : null };
+    }),
+  toggleSelect: (id) => {
+    const { selectedIds, setSelection } = get();
+    if (selectedIds.includes(id)) setSelection(selectedIds.filter((x) => x !== id));
+    else setSelection([...selectedIds, id], id);
+  },
+  setEditingText: (id) => set({ editingTextId: id, ...(id ? { selectedItemId: id, selectedIds: [id] } : {}) }),
   setSheet: (sheet) => set({ sheet }),
   setTtsOpen: (ttsOpen) => set({ ttsOpen }),
   setClipboard: (clipboard) => set({ clipboard }),
